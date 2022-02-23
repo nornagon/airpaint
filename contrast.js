@@ -54,6 +54,7 @@ function _apcaContrast(txtY, bgY) {
 }
 
 // https://www.w3.org/WAI/GL/wiki/Relative_luminance#Definition_as_Stated_in_WCAG_2.x
+// see also https://stackoverflow.com/a/56678483
 export function relativeLuminance(color) {
   const { r, g, b } = color
   const R = r <= 0.04045 ? r/12.92 : Math.pow((r+0.055)/1.055, 2.4)

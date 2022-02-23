@@ -59,14 +59,25 @@ const App = {
     fg: 191,
     bg: 184,
   },
+  apply: {
+    glyph: true,
+    fg: true,
+    bg: true,
+  },
   skin: {
     borders: {r: 0, g: 0, b: 0},
     background: {r: 13/255, g: 24/255, b: 33/255},
     glyphs: {
       selected: {r: 246/255,g: 234/255,b: 189/255},
       aligned: {r: 59/255,g: 55/255,b: 42/255},
-      other: {r: 84/255,g: 79/255,b: 61/255}
-    }
+      other: {r: 84/255,g: 79/255,b: 61/255},
+    },
+    buttons: {
+      usable: {r: 118/255,g: 126/255,b: 167/255},
+      active: {r: 184/255,g: 175/255,b: 140/255},
+      inactive: {r: 84/255,g: 79/255,b: 61/255},
+      highlight: {r: 24/255,g: 38/255,b: 54/255},
+    },
   },
   ui: [
     // -- Font --
@@ -151,7 +162,7 @@ const App = {
       x: 1,
       y: 20,
       width: 16,
-      height: 16,
+      height: 12,
       draw(ctx) {
         for (let y = 0; y < (palette.length / 16)|0; y++) for (let x = 0; x < 16; x++) {
           const i = y * 16 + x
@@ -187,6 +198,93 @@ const App = {
       },
     },
 
+    // -- Apply --
+    {
+      x: 9,
+      y: 33,
+      draw(ctx) {
+        [...'Apply'].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+        })
+        const borderFg = App.skin.borders
+        const borderBg = App.skin.background
+        const height = 4
+        const width = 7
+        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+        for (let i = 0; i < height; i++) {
+          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+        }
+        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+        for (let i = 0; i < width; i++)
+          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing._URD, 1 + 'Apply'.length + 1, 0, borderFg, borderBg)
+        for (let i = 1 + 'Apply'.length + 1 + 1; i < width + 1; i++)
+          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+        for (let y = 0; y < 4; y++) for (let x = 0; x < 7; x++)
+          ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+      },
+    },
+    {
+      x: 10,
+      y: 34,
+      width: 7,
+      height: 1,
+      draw(ctx) {
+        const fg = App.apply.glyph ? App.skin.buttons.active : App.skin.buttons.inactive;
+        const bg = this.tmouse ? App.skin.buttons.highlight : null;
+        [...' Glyph '].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
+        })
+      },
+      mousedown(_x, _y, button) {
+        if (button === 0) {
+          App.apply.glyph = !App.apply.glyph
+        }
+      },
+    },
+    {
+      x: 10,
+      y: 35,
+      width: 7,
+      height: 1,
+      draw(ctx) {
+        const fg = App.apply.fg ? App.skin.buttons.active : App.skin.buttons.inactive;
+        const bg = this.tmouse ? App.skin.buttons.highlight : null;
+        [...' Fore  '].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
+        })
+        ctx.drawChar(0, 6, 0, null, palette[App.paint.fg])
+      },
+      mousedown(_x, _y, button) {
+        if (button === 0) {
+          App.apply.fg = !App.apply.fg
+        }
+      },
+    },
+    {
+      x: 10,
+      y: 36,
+      width: 7,
+      height: 1,
+      draw(ctx) {
+        const fg = App.apply.bg ? App.skin.buttons.active : App.skin.buttons.inactive;
+        const bg = this.tmouse ? App.skin.buttons.highlight : null;
+        [...' Back  '].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
+        })
+        ctx.drawChar(0, 6, 0, null, palette[App.paint.bg])
+      },
+      mousedown(_x, _y, button) {
+        if (button === 0) {
+          App.apply.bg = !App.apply.bg
+        }
+      },
+    },
+
     // -- Canvas --
     {
       x: 18,
@@ -197,20 +295,33 @@ const App = {
         for (const [k, v] of App.map.entries()) {
           const [x, y] = k.split(',')
           const { char, fg, bg } = v
-          ctx.drawChar(char, +x, +y, palette[fg], palette[bg])
+          ctx.drawChar(
+            char ?? ' '.charCodeAt(0),
+            +x, +y,
+            fg != null ? palette[fg] : null,
+            bg != null ? palette[bg] : null
+          )
         }
-        if (this.tmouse)
-          ctx.drawChar(App.paint.char, this.tmouse.x, this.tmouse.y, palette[App.paint.fg], palette[App.paint.bg])
+        if (this.tmouse) {
+          const { char = ' '.charCodeAt(0), fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
+          ctx.drawChar(char, this.tmouse.x, this.tmouse.y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+        }
+      },
+      applied(x, y) {
+        const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
+        if (App.apply.glyph) paint.char = App.paint.char
+        if (App.apply.fg) paint.fg = App.paint.fg
+        if (App.apply.bg) paint.bg = App.paint.bg
+        return paint
+      },
+      paint(x, y) {
+        App.map.set(`${x},${y}`, this.applied(x, y))
       },
       mousedown(x, y, button) {
-        if (button === 0) {
-          App.map.set(`${x},${y}`, { ...App.paint })
-        }
+        if (button === 0) this.paint(x, y)
       },
       mousemove(x, y, buttons) {
-        if (buttons & 1) {
-          App.map.set(`${x},${y}`, { ...App.paint })
-        }
+        if (buttons & 1) this.paint(x, y)
       },
     },
   ],
@@ -219,7 +330,7 @@ const App = {
       Object.setPrototypeOf(el, {
         get tmouse() {
           const atm = App.tmouse
-          if (!atm || atm.x < this.x || atm.y < this.y || atm.x > this.x + this.width || atm.y > this.y + this.height)
+          if (!atm || atm.x < this.x || atm.y < this.y || atm.x >= this.x + this.width || atm.y >= this.y + this.height)
             return null
           return {x: atm.x - this.x, y: atm.y - this.y}
         },
