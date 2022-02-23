@@ -11,7 +11,7 @@ await new Promise(resolve => {
   font.onload = resolve
 })
 
-const WHITE = {r: 1, g: 1, b: 1, a: 1}
+const WHITE = {r: 1, g: 1, b: 1}
 const palette = parseREXPalette(await fetch('Palette.txt').then(x => x.text()))
 
 function parseREXPalette(txt) {
@@ -20,10 +20,30 @@ function parseREXPalette(txt) {
   let m
   while (m = re.exec(txt)) {
     const [, r, g, b] = m
-    colors.push({r: +r/255, g: +g/255, b: +b/255, a: 1})
+    colors.push({r: +r/255, g: +g/255, b: +b/255})
   }
   return colors
 }
+
+const BoxDrawing = {
+  // The CP437 box drawing characters are arranged in this ridiculous way because on the original IBM PC MDA adapter,
+  // characters were 8x8 but the display put a pixel of space between them. So David J. Bradley, Andy Saenz and Lew
+  // Eggebrecht, in their infinite wisdom, decided to hardcode, _into the graphics card_, that when displaying
+  // characters in the range 0xC0-0xDF, the rightmost column of pixels would be duplicated into the 9th column on the
+  // screen, to avoid a gap in the line.
+  LURD: 0xc0 + 5,
+  LUR_: 0xc0 + 1,
+  LU_D: 0xb0 + 4,
+  L_RD: 0xc0 + 2,
+  _URD: 0xc0 + 3,
+  __RD: 0xd0 + 10,
+  _UR_: 0xc0 + 0,
+  LU__: 0xd0 + 9,
+  L__D: 0xb0 + 15,
+  L_R_: 0xc0 + 4,
+  _U_D: 0xb0 + 3,
+}
+
 
 const sidebarWidth = 18
 const App = {
@@ -38,6 +58,15 @@ const App = {
     fg: 191,
     bg: 184,
   },
+  skin: {
+    borders: {r: 0, g: 0, b: 0},
+    background: {r: 13/255, g: 24/255, b: 33/255},
+    glyphs: {
+      selected: {r: 246/255,g: 234/255,b: 189/255},
+      aligned: {r: 59/255,g: 55/255,b: 42/255},
+      other: {r: 84/255,g: 79/255,b: 61/255}
+    }
+  },
   ui: [
     // -- Font --
     {
@@ -46,6 +75,24 @@ const App = {
         [...'Font'].forEach((c, i) => {
           ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
         })
+        const borderFg = App.skin.borders
+        const borderBg = App.skin.background
+        const height = 16
+        const width = 16
+        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+        for (let i = 0; i < height; i++) {
+          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+        }
+        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+        for (let i = 0; i < width; i++)
+          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing._URD, 1 + 'Font'.length + 1, 0, borderFg, borderBg)
+        for (let i = 1 + 'Font'.length + 1 + 1; i < width + 1; i++)
+          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
       }
     },
     {
@@ -56,12 +103,12 @@ const App = {
         const selectedY = (App.paint.char / 16)|0
         for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
           const color =
-            x === selectedX && y === selectedY
-            ? {r:1,g:1,b:1,a:1}
+            (x === selectedX && y === selectedY) || (this.tmouse?.x === x && this.tmouse?.y === y)
+            ? App.skin.glyphs.selected
             : x === selectedX || y === selectedY
-            ? {r:1,g:1,b:1,a:0.5}
-            : {r:1,g:1,b:1,a:0.2}
-          ctx.drawChar(y*16+x, x, y, color)
+            ? App.skin.glyphs.aligned
+            : App.skin.glyphs.other
+          ctx.drawChar(y*16+x, x, y, color, App.skin.background)
         }
       },
       mousedown(x, y, button) {
@@ -79,6 +126,24 @@ const App = {
         [...'Palette'].forEach((c, i) => {
           ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
         })
+        const borderFg = App.skin.borders
+        const borderBg = App.skin.background
+        const height = 12
+        const width = 16
+        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+        for (let i = 0; i < height; i++) {
+          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+        }
+        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+        for (let i = 0; i < width; i++)
+          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing._URD, 1 + 'Palette'.length + 1, 0, borderFg, borderBg)
+        for (let i = 1 + 'Palette'.length + 1 + 1; i < width + 1; i++)
+          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
       }
     },
     {
@@ -105,10 +170,47 @@ const App = {
           App.paint.bg = y * 16 + x
         }
       }
-    }
+    },
+
+    // -- Canvas --
+    {
+      x: 18,
+      y: 0,
+      width: Infinity,
+      height: Infinity,
+      draw(ctx) {
+        for (const [k, v] of App.map.entries()) {
+          const [x, y] = k.split(',')
+          const { char, fg, bg } = v
+          ctx.drawChar(char, +x, +y, palette[fg], palette[bg])
+        }
+        if (this.tmouse)
+          ctx.drawChar(App.paint.char, this.tmouse.x, this.tmouse.y, WHITE)
+      },
+      mousedown(x, y, button) {
+        if (button === 0) {
+          App.map.set(`${x},${y}`, { ...App.paint })
+        }
+      },
+      mousemove(x, y, buttons) {
+        if (buttons & 1) {
+          App.map.set(`${x},${y}`, { ...App.paint })
+        }
+      },
+    },
   ],
+  init() {
+    for (const el of this.ui)
+      Object.setPrototypeOf(el, {
+        get tmouse() {
+          const atm = App.tmouse
+          if (!atm || atm.x < this.x || atm.y < this.y || atm.x > this.x + this.width || atm.y > this.y + this.height)
+            return null
+          return {x: atm.x - this.x, y: atm.y - this.y}
+        },
+      })
+  },
   draw(drawChar) {
-    // draw sidebar
     this.ui.forEach((el) => {
       if (el.draw) {
         el.draw({
@@ -118,25 +220,13 @@ const App = {
         })
       }
     });
-
-    // draw image
-    for (const [k, v] of this.map.entries()) {
-      const [x, y] = k.split(',')
-      drawChar(v.char, +x + sidebarWidth, +y, palette[v.fg], palette[v.bg])
-    }
-    //for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) drawChar(0x1, x, y)
-    if (this.mouse && this.tmouse.x >= sidebarWidth) {
-      drawChar(this.paint.char, this.tmouse.x, this.tmouse.y, WHITE)
-    }
   },
   mousemove() {
-    if (this.mouseButtons & 1) {
-      const { x, y } = this.tmouse
-      const tx = x - sidebarWidth
-      const ty = y
-      if (tx >= 0 && ty >= 0) {
-        this.map.set(`${tx},${ty}`, { ...this.paint })
-      }
+    const { x, y } = this.tmouse
+    for (const el of this.ui) {
+      if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
+        if (el.mousemove)
+          el.mousemove(x - el.x, y - el.y, this.mouseButtons)
     }
   },
   mousedown(button) {
@@ -146,15 +236,11 @@ const App = {
         if (el.mousedown)
           el.mousedown(x - el.x, y - el.y, button)
     }
-    if (button === 0) {
-      if (x >= sidebarWidth) {
-        this.map.set(`${x - sidebarWidth},${y}`, { ...this.paint })
-      }
-    }
   }
 }
 
 function start() {
+  App.init()
   const canvas = document.createElement('canvas')
   canvas.style.width = '100%'
   canvas.style.height = '100%'

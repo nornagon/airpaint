@@ -216,7 +216,7 @@ export class SpriteBatch {
     const x4 = x
     const y4 = y + height
 
-    const {r, g, b, a} = color
+    const {r, g, b, a = 1} = color
 
     this.vertex(x1, y1, r, g, b, a, u, v)
     this.vertex(x2, y2, r, g, b, a, u2, v)
