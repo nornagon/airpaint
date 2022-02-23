@@ -11,16 +11,34 @@ await new Promise(resolve => {
   font.onload = resolve
 })
 
+const palette = parseREXPalette(await fetch('Palette.txt').then(x => x.text()))
+
+function parseREXPalette(txt) {
+  const colors = []
+  const re = /\{\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\}/g
+  let m
+  while (m = re.exec(txt)) {
+    const [, r, g, b] = m
+    colors.push({r: +r/255, g: +g/255, b: +b/255, a: 1})
+  }
+  return colors
+}
+
 const sidebarWidth = 18
 const App = {
   map: new Map,
   mouse: null,
+  get tmouse() {
+    return this.mouse ? { x: (this.mouse.x / tileset.tileWidth)|0, y: (this.mouse.y / tileset.tileHeight)|0 } : null;
+  },
   mouseButtons: 0,
   paint: {
     char: 1
   },
   draw(drawChar) {
     // draw sidebar
+
+    // -- Font --
     [...'Font'].forEach((c, i) => {
       drawChar(c.charCodeAt(0), 2+i, 1)
     })
@@ -35,23 +53,32 @@ const App = {
         : {r:1,g:1,b:1,a:0.2}
       drawChar(y*16+x, x + 1, y + 2, color)
     }
+
+    // -- Palette --
+    [...'Palette'].forEach((c, i) => {
+      drawChar(c.charCodeAt(0), 2+i, 19)
+    })
+    for (let y = 0; y < (palette.length / 16)|0; y++) for (let x = 0; x < 16; x++) {
+      const color = palette[y * 16 + x]
+      drawChar(0xdb, x + 1, y + 20, color)
+    }
+
+
     // draw image
     for (const [k, v] of this.map.entries()) {
       const [x, y] = k.split(',')
       drawChar(v, +x + sidebarWidth, +y)
     }
-      /*
-    for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
-      drawChar(0x1, x, y)
-    }*/
-    if (this.mouse) {
-      drawChar(0xdb, (this.mouse.x / tileset.tileWidth)|0, (this.mouse.y / tileset.tileHeight)|0)
+    //for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) drawChar(0x1, x, y)
+    if (this.mouse && this.tmouse.x >= sidebarWidth) {
+      drawChar(this.paint.char, this.tmouse.x, this.tmouse.y)
     }
   },
   mousemove() {
     if (this.mouseButtons & 1) {
-      const tx = ((this.mouse.x/tileset.tileWidth)|0) - sidebarWidth
-      const ty = (this.mouse.y/tileset.tileHeight)|0
+      const { x, y } = this.tmouse
+      const tx = x - sidebarWidth
+      const ty = y
       if (tx >= 0 && ty >= 0) {
         this.map.set(`${tx},${ty}`, this.paint.char)
       }
@@ -61,7 +88,7 @@ const App = {
     if (button === 0) {
       const mtx = (this.mouse.x/tileset.tileWidth)|0
       const mty = (this.mouse.y/tileset.tileHeight)|0
-      if (mtx >= 1 && mtx <= 17 && mty >= 2 && mty <= 18) {
+      if (mtx >= 1 && mtx <= 16 && mty >= 2 && mty <= 17) {
         this.paint.char = (mty - 2) * 16 + mtx - 1
       } else if (mtx >= sidebarWidth) {
         this.map.set(`${mtx - sidebarWidth},${mty}`, this.paint.char)
@@ -80,7 +107,7 @@ function start() {
   const prog = createProgram(gl,
     `
       #version 100
-      precision highp float;
+      precision lowp float;
       uniform mat4 u_projView;
       attribute vec4 Color;
       attribute vec2 Position;
@@ -95,7 +122,7 @@ function start() {
     `,
     `
       #version 100
-      precision highp float;
+      precision lowp float;
       uniform sampler2D u_texture;
       varying vec4 vColor;
       varying vec2 vTexCoord;
