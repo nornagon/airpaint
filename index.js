@@ -1,4 +1,5 @@
 import { SpriteBatch, Texture, ImageTextureSource, createProgram } from './gl.js'
+import { apcaContrast } from './contrast.js'
 const tileset = {
   image: 'fonts/cp437_8x8.png',
   tileWidth: 8,
@@ -14,14 +15,6 @@ await new Promise(resolve => {
 const WHITE = {r: 1, g: 1, b: 1}
 const BLACK = {r: 0, g: 0, b: 0}
 const palette = parseREXPalette(await fetch('Palette.txt').then(x => x.text()))
-
-function luminance(color) {
-  const { r, g, b } = color
-  const R = r <= 0.04045 ? r/12.92 : Math.pow((r+0.055)/1.055, 2.4)
-  const G = g <= 0.04045 ? g/12.92 : Math.pow((g+0.055)/1.055, 2.4)
-  const B = b <= 0.04045 ? b/12.92 : Math.pow((b+0.055)/1.055, 2.4)
-  return 0.2126*R + 0.7152*G + 0.0722*B
-}
 
 function parseREXPalette(txt) {
   const colors = []
@@ -165,10 +158,14 @@ const App = {
           const color = palette[i]
           ctx.drawChar(0, x, y, null, color)
           if (i === App.paint.fg) {
-            const wb = luminance(color) > 0.5 ? BLACK : WHITE
+            const cw = Math.abs(apcaContrast(WHITE, color))
+            const cb = Math.abs(apcaContrast(BLACK, color))
+            const wb = cb > cw ? BLACK : WHITE
             ctx.drawChar('f'.charCodeAt(0), x, y, wb)
           } else if (i === App.paint.bg) {
-            const wb = luminance(color) > 0.5 ? BLACK : WHITE
+            const cw = Math.abs(apcaContrast(WHITE, color))
+            const cb = Math.abs(apcaContrast(BLACK, color))
+            const wb = cb > cw ? BLACK : WHITE
             ctx.drawChar('b'.charCodeAt(0), x, y, wb)
           }
         }
