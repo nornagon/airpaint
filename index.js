@@ -179,7 +179,15 @@ const App = {
         } else if (button === 2) {
           App.paint.bg = y * 16 + x
         }
-      }
+      },
+      mousemove(x, y, buttons) {
+        if (buttons & 1) {
+          App.paint.fg = y * 16 + x
+        }
+        if (buttons & 2) {
+          App.paint.bg = y * 16 + x
+        }
+      },
     },
 
     // -- Canvas --
@@ -195,7 +203,7 @@ const App = {
           ctx.drawChar(char, +x, +y, palette[fg], palette[bg])
         }
         if (this.tmouse)
-          ctx.drawChar(App.paint.char, this.tmouse.x, this.tmouse.y, WHITE)
+          ctx.drawChar(App.paint.char, this.tmouse.x, this.tmouse.y, palette[App.paint.fg], palette[App.paint.bg])
       },
       mousedown(x, y, button) {
         if (button === 0) {
