@@ -578,6 +578,34 @@ const App = {
               ctx.drawChar(char, x, y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
             })
           }
+          if (App.tool === 'copy' && this.toolStart) {
+            const lx = Math.min(this.toolStart.x, this.tmouse.x)
+            const hx = Math.max(this.toolStart.x, this.tmouse.x)
+            const ly = Math.min(this.toolStart.y, this.tmouse.y)
+            const hy = Math.max(this.toolStart.y, this.tmouse.y)
+            for (let y = ly; y <= hy; y++) {
+              ctx.drawChar(BoxDrawing._U_D, lx - 1, y, WHITE, BLACK)
+              ctx.drawChar(BoxDrawing._U_D, hx + 1, y, WHITE, BLACK)
+            }
+            for (let x = lx; x <= hx; x++) {
+              ctx.drawChar(BoxDrawing.L_R_, x, ly - 1, WHITE, BLACK)
+              ctx.drawChar(BoxDrawing.L_R_, x, hy + 1, WHITE, BLACK)
+            }
+            ctx.drawChar(BoxDrawing.__RD, lx - 1, ly - 1, WHITE, BLACK)
+            ctx.drawChar(BoxDrawing.L__D, hx + 1, ly - 1, WHITE, BLACK)
+            ctx.drawChar(BoxDrawing._UR_, lx - 1, hy + 1, WHITE, BLACK)
+            ctx.drawChar(BoxDrawing.LU__, hx + 1, hy + 1, WHITE, BLACK)
+          }
+          if (App.tool === 'paste' && App.pasteboard) {
+            for (const [k, v] of App.pasteboard.entries()) {
+              const [x, y] = k.split(',').map(i => +i)
+              const paint = { ...(App.map.get(`${x + this.tmouse.x},${y + this.tmouse.y}`) ?? {}) }
+              if (App.apply.glyph) paint.char = v.char
+              if (App.apply.fg) paint.fg = v.fg
+              if (App.apply.bg) paint.bg = v.bg
+              ctx.drawChar(paint.char, x + this.tmouse.x, y + this.tmouse.y, paint.fg != null ? palette[paint.fg] : null, paint.bg != null ? palette[paint.bg] : null)
+            }
+          }
         }
       },
       applied(x, y) {
@@ -607,15 +635,27 @@ const App = {
         })
         this.lastPaint = { x, y }
       },
+      paste(x, y) {
+        for (const [k, v] of App.pasteboard.entries()) {
+          const [dx, dy] = k.split(',').map(i => +i)
+          const paint = { ...(App.map.get(`${x+dx},${y+dy}`) ?? {}) }
+          if (App.apply.glyph) paint.char = v.char
+          if (App.apply.fg) paint.fg = v.fg
+          if (App.apply.bg) paint.bg = v.bg
+          App.map.set(`${x+dx},${y+dy}`, paint)
+        }
+      },
       mousedown(x, y, button) {
         if (button === 0) {
           if (App.tool === 'cell') {
             this.lastPaint = {x, y}
             this.paint(x, y)
-          } else if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval') {
+          } else if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval' || App.tool === 'copy') {
             this.toolStart = { x, y }
           } else if (App.tool === 'text') {
             App.ui.push(textToolOverlay({x: this.x + x, y: this.y + y}))
+          } else if (App.tool === 'paste') {
+            this.paste(x, y)
           }
         } else if (button === 2) {
           const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
@@ -626,7 +666,7 @@ const App = {
       },
       mouseup(x, y, button) {
         if (button === 0) {
-          if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval') {
+          if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval' || App.tool === 'copy') {
             if (this.tmouse && this.toolStart) {
               if (App.tool === 'line') {
                 bresenhamLine(this.toolStart.x, this.toolStart.y, x, y, (x, y) => {
@@ -645,6 +685,20 @@ const App = {
                 (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(x - this.toolStart.x), Math.abs(y - this.toolStart.y), (x, y) => {
                   App.map.set(`${x},${y}`, this.applied(x, y))
                 })
+              } else if (App.tool === 'copy') {
+                // TODO: should App.apply apply to copying into the pasteboard?
+                // What about cutting?
+                const pasteboard = new Map
+                const lx = Math.min(this.toolStart.x, x)
+                const hx = Math.max(this.toolStart.x, x)
+                const ly = Math.min(this.toolStart.y, y)
+                const hy = Math.max(this.toolStart.y, y)
+                for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
+                  const a = App.map.get(`${x},${y}`)
+                  if (a) pasteboard.set(`${x-lx},${y-ly}`, a)
+                  if (App.toolOptions.copyMode === 'cut') App.map.delete(`${x},${y}`)
+                }
+                App.pasteboard = pasteboard
               }
             }
             this.toolStart = null
