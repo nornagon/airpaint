@@ -74,9 +74,11 @@ function textToolOverlay({x, y}) {
     keypress(key) {
       if (key === 'Enter') {
         const offset = this.offset()
+        App.beginChange()
         for (let i = 0; i < this.text.length; i++) {
           App.map.set(`${this.x+i - offset},${this.y}`, this.applied(this.x + i - offset, this.y, this.text.charCodeAt(i)))
         }
+        App.finishChange()
         this.exit()
       }
       this.text += key
@@ -96,6 +98,28 @@ const DefaultForeground = 191
 const DefaultBackground = 184
 const App = {
   map: new Map,
+  undoStack: [],
+  redoStack: [],
+  beginChange() {
+    if (this.changing) return
+    this.changing = true
+    this.undoStack.push(new Map(this.map))
+    this.redoStack = []
+  },
+  finishChange() {
+    if (!this.changing) return
+    this.changing = false
+  },
+  undo() {
+    if (this.changing || !this.undoStack.length) return
+    this.redoStack.push(this.map)
+    this.map = this.undoStack.pop()
+  },
+  redo() {
+    if (this.changing || !this.redoStack.length) return
+    this.undoStack.push(this.map)
+    this.map = this.redoStack.pop()
+  },
   mouse: null,
   get tmouse() {
     return this.mouse ? { x: (this.mouse.x / tileset.tileWidth)|0, y: (this.mouse.y / tileset.tileHeight)|0 } : null;
@@ -262,6 +286,74 @@ const App = {
       mouseup() {
         this.mouseWentDownInPalette = false
       }
+    },
+
+    // -- Tools --
+    {
+      x: 0,
+      y: 33,
+      draw(ctx) {
+        const title = 'Tools';
+        [...title].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+        })
+        const borderFg = App.skin.borders
+        const borderBg = App.skin.background
+        const height = 6
+        const width = 7
+        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+        for (let i = 0; i < height; i++) {
+          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+        }
+        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+        for (let i = 0; i < width; i++)
+          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+        for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+          ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+      },
+    },
+    {
+      x: 1,
+      y: 34,
+      width: 7,
+      height: 1,
+      draw(ctx) {
+        const bg = this.tmouse ? App.skin.buttons.highlight : App.skin.background;
+        [...' Undo  '].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), i, 0, App.skin.buttons.usable, bg)
+        })
+      },
+      mousedown(_x, _y, button) {
+        if (button === 0) App.undo()
+      },
+      keydown(code, mods) {
+        if (mods && code === 'KeyZ') App.undo()
+      },
+    },
+    {
+      x: 1,
+      y: 35,
+      width: 7,
+      height: 1,
+      draw(ctx) {
+        const bg = this.tmouse ? App.skin.buttons.highlight : App.skin.background;
+        [...' Redo  '].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), i, 0, App.skin.buttons.usable, bg)
+        })
+      },
+      mousedown(_x, _y, button) {
+        if (button === 0) App.redo()
+      },
+      keydown(code, mods) {
+        if (mods && code === 'KeyY') App.redo()
+      },
     },
 
     // -- Apply --
@@ -636,6 +728,7 @@ const App = {
         this.lastPaint = { x, y }
       },
       paste(x, y) {
+        App.beginChange()
         for (const [k, v] of App.pasteboard.entries()) {
           const [dx, dy] = k.split(',').map(i => +i)
           const paint = { ...(App.map.get(`${x+dx},${y+dy}`) ?? {}) }
@@ -644,10 +737,12 @@ const App = {
           if (App.apply.bg) paint.bg = v.bg
           App.map.set(`${x+dx},${y+dy}`, paint)
         }
+        App.finishChange()
       },
       mousedown(x, y, button) {
         if (button === 0) {
           if (App.tool === 'cell') {
+            App.beginChange()
             this.lastPaint = {x, y}
             this.paint(x, y)
           } else if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval' || App.tool === 'copy') {
@@ -666,13 +761,19 @@ const App = {
       },
       mouseup(x, y, button) {
         if (button === 0) {
+          if (App.tool === 'cell') {
+            App.finishChange()
+          }
           if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval' || App.tool === 'copy') {
             if (this.tmouse && this.toolStart) {
               if (App.tool === 'line') {
+                App.beginChange()
                 bresenhamLine(this.toolStart.x, this.toolStart.y, x, y, (x, y) => {
                   App.map.set(`${x},${y}`, this.applied(x, y))
                 })
+                App.finishChange()
               } else if (App.tool === 'rect') {
+                App.beginChange()
                 const lx = Math.min(this.toolStart.x, x)
                 const hx = Math.max(this.toolStart.x, x)
                 const ly = Math.min(this.toolStart.y, y)
@@ -681,10 +782,13 @@ const App = {
                   if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
                     App.map.set(`${x},${y}`, this.applied(x, y))
                 }
+                App.finishChange()
               } else if (App.tool === 'oval') {
-                (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(x - this.toolStart.x), Math.abs(y - this.toolStart.y), (x, y) => {
+                App.beginChange()
+                ;(App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(x - this.toolStart.x), Math.abs(y - this.toolStart.y), (x, y) => {
                   App.map.set(`${x},${y}`, this.applied(x, y))
                 })
+                App.finishChange()
               } else if (App.tool === 'copy') {
                 // TODO: should App.apply apply to copying into the pasteboard?
                 // What about cutting?
@@ -710,6 +814,7 @@ const App = {
       },
       blur() {
         this.toolStart = null
+        App.finishChange() // noop if there's no change happening.
       },
       mousemove(x, y, buttons) {
         if (App.tool === 'cell') {
