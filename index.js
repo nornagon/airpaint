@@ -1,5 +1,6 @@
 import { SpriteBatch, Texture, ImageTextureSource, createProgram } from './gl.js'
 import { apcaContrast } from './contrast.js'
+import { bresenhamLine } from './bresenham.js'
 const tileset = {
   image: 'fonts/cp437_8x8.png',
   tileWidth: 8,
@@ -46,6 +47,23 @@ const BoxDrawing = {
   _U_D: 0xb0 + 3,
 }
 
+function button({title, active, click, ...rest}) {
+  return {
+    height: 1,
+    draw(ctx) {
+      const fg = active() ? App.skin.buttons.active : App.skin.buttons.inactive;
+      const bg = this.tmouse ? App.skin.buttons.highlight : null;
+      [...title()].forEach((c, i) => {
+        ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
+      })
+    },
+    mousedown(_x, _y, button) {
+      if (button === 0) click()
+    },
+    ...rest
+  }
+}
+
 
 const App = {
   map: new Map,
@@ -63,6 +81,20 @@ const App = {
     glyph: true,
     fg: true,
     bg: true,
+  },
+  tool: 'cell',
+  toolOptions: {
+    fillRect: false,
+    fillOval: false,
+    joinCells: false,
+    copyMode: 'copy',
+  },
+  selectTool(tool) {
+    if (tool === 'cell' && this.tool === 'cell') this.toolOptions.joinCells = !this.toolOptions.joinCells
+    if (tool === 'rect' && this.tool === 'rect') this.toolOptions.fillRect = !this.toolOptions.fillRect
+    if (tool === 'oval' && this.tool === 'oval') this.toolOptions.fillOval = !this.toolOptions.fillOval
+    if (tool === 'copy' && this.tool === 'copy') this.toolOptions.copyMode = this.toolOptions.copyMode === 'copy' ? 'cut' : 'copy'
+    this.tool = tool
   },
   skin: {
     borders: {r: 0, g: 0, b: 0},
@@ -182,6 +214,7 @@ const App = {
         }
       },
       mousedown(x, y, button) {
+        this.mouseWentDownInPalette = true
         if (button === 0) {
           App.paint.fg = y * 16 + x
         } else if (button === 2) {
@@ -189,6 +222,7 @@ const App = {
         }
       },
       mousemove(x, y, buttons) {
+        if (!this.mouseWentDownInPalette) return
         if (buttons & 1) {
           App.paint.fg = y * 16 + x
         }
@@ -196,6 +230,9 @@ const App = {
           App.paint.bg = y * 16 + x
         }
       },
+      mouseup() {
+        this.mouseWentDownInPalette = false
+      }
     },
 
     // -- Apply --
@@ -224,7 +261,7 @@ const App = {
         ctx.drawChar(BoxDrawing._URD, 1 + 'Apply'.length + 1, 0, borderFg, borderBg)
         for (let i = 1 + 'Apply'.length + 1 + 1; i < width + 1; i++)
           ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
-        for (let y = 0; y < 4; y++) for (let x = 0; x < 7; x++)
+        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
           ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
       },
     },
@@ -286,6 +323,119 @@ const App = {
       },
     },
 
+    // -- Draw --
+    {
+      x: 9,
+      y: 39,
+      draw(ctx) {
+        const title = 'Draw';
+        [...title].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+        })
+        const borderFg = App.skin.borders
+        const borderBg = App.skin.background
+        const height = 8
+        const width = 7
+        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+        for (let i = 0; i < height; i++) {
+          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+        }
+        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+        for (let i = 0; i < width; i++)
+          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+        for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+          ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+      },
+    },
+    button({
+      x: 10,
+      y: 40,
+      width: 7,
+      title: () => ` Cell ${App.toolOptions.joinCells ? '\u00c5' : '\u00c4'}`,
+      active: () => App.tool === 'cell',
+      click: () => App.selectTool('cell'),
+      keydown: (code) => code === 'KeyC' && App.selectTool('cell'),
+    }),
+    button({
+      x: 10,
+      y: 41,
+      width: 7,
+      title: () => ' Line  ',
+      active: () => App.tool === 'line',
+      click: () => App.selectTool('line'),
+      keydown: (code) => code === 'KeyL' && App.selectTool('line'),
+    }),
+    button({
+      x: 10,
+      y: 42,
+      width: 7,
+      title: () => ` Rect ${App.toolOptions.fillRect ? '\u00fe' : '\u00ff'}`,
+      active: () => App.tool === 'rect',
+      click: () => App.selectTool('rect'),
+      keydown: (code) => code === 'KeyR' && App.selectTool('rect'),
+    }),
+    button({
+      x: 10,
+      y: 43,
+      width: 7,
+      title: () => ` Oval ${App.toolOptions.fillOval ? '\u00fe' : '\u00ff'}`,
+      active: () => App.tool === 'oval',
+      click: () => App.selectTool('oval'),
+      keydown: (code) => code === 'KeyO' && App.selectTool('oval'),
+    }),
+    button({
+      x: 10,
+      y: 44,
+      width: 7,
+      title: () => ' Fill  ',
+      active: () => App.tool === 'fill',
+      click: () => App.selectTool('fill'),
+      keydown: (code) => code === 'KeyI' && App.selectTool('fill'),
+    }),
+    button({
+      x: 10,
+      y: 45,
+      width: 7,
+      title: () => ' Text  ',
+      active: () => App.tool === 'text',
+      click: () => App.selectTool('text'),
+      keydown: (code) => code === 'KeyT' && App.selectTool('text'),
+    }),
+    button({
+      x: 10,
+      y: 46,
+      width: 7,
+      title: () => ` Copy ${App.toolOptions.copyMode === 'copy' ? 'c' : 'x'}`,
+      active: () => App.tool === 'copy',
+      click: () => App.selectTool('copy'),
+      keydown: (code, mods) => {
+        if (mods && code === 'KeyC') {
+          App.tool = 'copy'
+          App.toolOptions.copyMode = 'copy'
+        }
+        if (mods && code === 'KeyX') {
+          App.tool = 'copy'
+          App.toolOptions.copyMode = 'cut'
+        }
+      },
+    }),
+    button({
+      x: 10,
+      y: 47,
+      width: 7,
+      title: () => ' Paste ',
+      active: () => App.tool === 'paste',
+      click: () => App.selectTool('paste'),
+      keydown: (code, mods) => mods && code === 'KeyV' && App.selectTool('paste'),
+    }),
+
     // -- Canvas --
     {
       x: 18,
@@ -304,8 +454,27 @@ const App = {
           )
         }
         if (this.tmouse) {
-          const { char = ' '.charCodeAt(0), fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
-          ctx.drawChar(char, this.tmouse.x, this.tmouse.y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+          if (App.tool === 'cell') {
+            const { char = ' '.charCodeAt(0), fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
+            ctx.drawChar(char, this.tmouse.x, this.tmouse.y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+          }
+          if (App.tool === 'line' && this.toolStart) {
+            bresenhamLine(this.toolStart.x, this.toolStart.y, this.tmouse.x, this.tmouse.y, (x, y) => {
+              const { char = ' '.charCodeAt(0), fg, bg } = this.applied(x, y)
+              ctx.drawChar(char, x, y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+            })
+          }
+          if (App.tool === 'rect' && this.toolStart) {
+            const lx = Math.min(this.toolStart.x, this.tmouse.x)
+            const hx = Math.max(this.toolStart.x, this.tmouse.x)
+            const ly = Math.min(this.toolStart.y, this.tmouse.y)
+            const hy = Math.max(this.toolStart.y, this.tmouse.y)
+            for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
+              const { char = ' '.charCodeAt(0), fg, bg } = this.applied(x, y)
+              if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
+                ctx.drawChar(char, x, y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+            }
+          }
         }
       },
       applied(x, y) {
@@ -316,19 +485,59 @@ const App = {
         return paint
       },
       paint(x, y) {
-        App.map.set(`${x},${y}`, this.applied(x, y))
+        bresenhamLine(this.lastPaint.x, this.lastPaint.y, x, y, (x, y) => {
+          App.map.set(`${x},${y}`, this.applied(x, y))
+        })
+        this.lastPaint = { x, y }
       },
       mousedown(x, y, button) {
-        if (button === 0) this.paint(x, y)
-        if (button === 2) {
+        if (button === 0) {
+          if (App.tool === 'cell') {
+            this.lastPaint = {x, y}
+            this.paint(x, y)
+          } else if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval') {
+            this.toolStart = { x, y }
+          }
+        } else if (button === 2) {
           const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
           if (App.apply.glyph) App.paint.char = paint.char
           if (App.apply.fg) App.paint.fg = paint.fg
           if (App.apply.bg) App.paint.bg = paint.bg
         }
       },
+      mouseup(x, y, button) {
+        if (button === 0) {
+          if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval') {
+            if (this.tmouse && this.toolStart) {
+              if (App.tool === 'line') {
+                bresenhamLine(this.toolStart.x, this.toolStart.y, x, y, (x, y) => {
+                  App.map.set(`${x},${y}`, this.applied(x, y))
+                })
+              } else if (App.tool === 'rect') {
+                const lx = Math.min(this.toolStart.x, x)
+                const hx = Math.max(this.toolStart.x, x)
+                const ly = Math.min(this.toolStart.y, y)
+                const hy = Math.max(this.toolStart.y, y)
+                for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
+                  if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
+                    App.map.set(`${x},${y}`, this.applied(x, y))
+                }
+              }
+            }
+            this.toolStart = null
+          }
+        }
+      },
+      keydown(code) {
+        if (code === 'Escape') this.toolStart = null
+      },
+      blur() {
+        this.toolStart = null
+      },
       mousemove(x, y, buttons) {
-        if (buttons & 1) this.paint(x, y)
+        if (App.tool === 'cell') {
+          if (buttons & 1) this.paint(x, y)
+        }
       },
     },
   ],
@@ -337,7 +546,7 @@ const App = {
       Object.setPrototypeOf(el, {
         get tmouse() {
           const atm = App.tmouse
-          if (!atm || atm.x < this.x || atm.y < this.y || atm.x >= this.x + this.width || atm.y >= this.y + this.height)
+          if (!atm || !this.width || !this.height || atm.x < this.x || atm.y < this.y || atm.x >= this.x + this.width || atm.y >= this.y + this.height)
             return null
           return {x: atm.x - this.x, y: atm.y - this.y}
         },
@@ -364,13 +573,23 @@ const App = {
   },
   mousedown(button) {
     const { x, y } = this.tmouse
-    for (const el of this.ui) {
+    for (const el of this.ui)
       if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
         if (el.mousedown)
           el.mousedown(x - el.x, y - el.y, button)
+  },
+  mouseup(button) {
+    if (this.tmouse) {
+      const { x, y } = this.tmouse
+      for (const el of this.ui)
+        if (el.mouseup)
+          el.mouseup(x - el.x, y - el.y, button)
     }
   },
-  keydown(code) {
+  keydown(code, mods) {
+    for (const el of this.ui)
+      if (el.keydown)
+        el.keydown(code, mods)
     if (code === 'KeyG') App.apply.glyph = !App.apply.glyph
     if (code === 'KeyF') App.apply.fg = !App.apply.fg
     if (code === 'KeyB') App.apply.bg = !App.apply.bg
@@ -395,6 +614,11 @@ const App = {
       App.paint.char = y * 16 + (x + 1) % 16
     }
   },
+  blur() {
+    for (const el of this.ui)
+      if (el.blur)
+        el.blur()
+  }
 }
 window.App = App
 
@@ -495,7 +719,7 @@ function start() {
     console.timeEnd('draw')
   }
 
-  canvas.addEventListener('mousemove', (e) => {
+  window.addEventListener('mousemove', (e) => {
     if (document.hasFocus()) {
       App.mouse = { x: e.clientX, y: e.clientY }
       App.mousemove()
@@ -509,19 +733,21 @@ function start() {
     App.mousedown(e.button)
     dirty()
   })
-  canvas.addEventListener('mouseup', (e) => {
+  window.addEventListener('mouseup', (e) => {
     App.mouseButtons = e.buttons
+    App.mouseup(e.button)
     dirty()
   })
   canvas.addEventListener('contextmenu', (e) => e.preventDefault())
   window.addEventListener('blur', () => {
     App.mouseButtons = 0
     App.mouse = null
+    App.blur()
     dirty()
   })
 
   window.addEventListener('keydown', (e) => {
-    App.keydown(e.code)
+    App.keydown(e.code, e.ctrlKey || e.metaKey /* TODO */)
     dirty()
   })
 }
