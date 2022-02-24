@@ -819,6 +819,7 @@ function start() {
   const canvas = document.createElement('canvas')
   canvas.style.width = '100%'
   canvas.style.height = '100%'
+  canvas.style.imageRendering = 'pixelated'
   document.body.appendChild(canvas)
   const gl = canvas.getContext('webgl')
   const tex = new Texture(gl, new ImageTextureSource(font))
@@ -859,7 +860,7 @@ function start() {
   const spriteBatch = new SpriteBatch(gl, prog)
 
   new ResizeObserver(entries => {
-    const ratio = devicePixelRatio
+    const ratio = 1;//devicePixelRatio
     canvas.width = entries[0].contentRect.width * ratio
     canvas.height = entries[0].contentRect.height * ratio
     dirty()
