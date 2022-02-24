@@ -1,6 +1,6 @@
 import { SpriteBatch, Texture, ImageTextureSource, createProgram } from './gl.js'
 import { apcaContrast } from './contrast.js'
-import { bresenhamLine } from './bresenham.js'
+import { bresenhamLine, ellipse, filledEllipse } from './bresenham.js'
 import { BoxDrawing, boxDrawingChar, boxDrawingDoubleChar, isSingleBoxDrawingChar, isDoubleBoxDrawingChar } from './cp437.js'
 const tileset = {
   image: 'fonts/cp437_8x8.png',
@@ -527,6 +527,12 @@ const App = {
                 ctx.drawChar(char, x, y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
             }
           }
+          if (App.tool === 'oval' && this.toolStart) {
+            (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(this.tmouse.x - this.toolStart.x), Math.abs(this.tmouse.y - this.toolStart.y), (x, y) => {
+              const { char = ' '.charCodeAt(0), fg, bg } = this.applied(x, y)
+              ctx.drawChar(char, x, y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+            })
+          }
         }
       },
       applied(x, y) {
@@ -588,6 +594,10 @@ const App = {
                   if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
                     App.map.set(`${x},${y}`, this.applied(x, y))
                 }
+              } else if (App.tool === 'oval') {
+                (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(x - this.toolStart.x), Math.abs(y - this.toolStart.y), (x, y) => {
+                  App.map.set(`${x},${y}`, this.applied(x, y))
+                })
               }
             }
             this.toolStart = null
