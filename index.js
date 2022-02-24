@@ -46,6 +46,67 @@ const BoxDrawing = {
   L_R_: 0xc0 + 4,
   _U_D: 0xb0 + 3,
 }
+const BoxDrawingDouble = {
+  LURD: 0xce,
+  LUR_: 0xca,
+  LU_D: 0xb9,
+  L_RD: 0xcb,
+  _URD: 0xcc,
+  __RD: 0xc9,
+  _UR_: 0xc8,
+  LU__: 0xbc,
+  L__D: 0xbb,
+  L_R_: 0xcd,
+  _U_D: 0xba,
+}
+const BoxDrawingB = [
+  BoxDrawing.LURD, // ____
+  BoxDrawing._U_D, // ___D
+  BoxDrawing.L_R_, // __R_
+  BoxDrawing.__RD,
+  BoxDrawing._U_D, // _U__
+  BoxDrawing._U_D,
+  BoxDrawing._UR_,
+  BoxDrawing._URD,
+  BoxDrawing.L_R_, // L___
+  BoxDrawing.L__D,
+  BoxDrawing.L_R_,
+  BoxDrawing.L_RD,
+  BoxDrawing.LU__,
+  BoxDrawing.LU_D,
+  BoxDrawing.LUR_,
+  BoxDrawing.LURD,
+]
+const BoxDrawingDoubleB = [
+  BoxDrawingDouble.LURD, // ____
+  BoxDrawingDouble._U_D, // ___D
+  BoxDrawingDouble.L_R_, // __R_
+  BoxDrawingDouble.__RD,
+  BoxDrawingDouble._U_D, // _U__
+  BoxDrawingDouble._U_D,
+  BoxDrawingDouble._UR_,
+  BoxDrawingDouble._URD,
+  BoxDrawingDouble.L_R_, // L___
+  BoxDrawingDouble.L__D,
+  BoxDrawingDouble.L_R_,
+  BoxDrawingDouble.L_RD,
+  BoxDrawingDouble.LU__,
+  BoxDrawingDouble.LU_D,
+  BoxDrawingDouble.LUR_,
+  BoxDrawingDouble.LURD,
+]
+function boxDrawingChar(cl, cu, cr, cd) {
+  return BoxDrawingB[(cl << 3) | (cu << 2) | (cr << 1) | cd]
+}
+function boxDrawingDoubleChar(cl, cu, cr, cd) {
+  return BoxDrawingDoubleB[(cl << 3) | (cu << 2) | (cr << 1) | cd]
+}
+function isSingleBoxDrawingChar(c) {
+  return (c >= 0xbf && c <= 0xc5) || (c >= 0xb3 && c <= 0xb4) || (c >= 0xd9 && c <= 0xda)
+}
+function isDoubleBoxDrawingChar(c) {
+  return (c >= 0xb9 && c <= 0xbc) || (c >= 0xc8 && c <= 0xce)
+}
 
 function button({title, active, click, ...rest}) {
   return {
@@ -65,6 +126,8 @@ function button({title, active, click, ...rest}) {
 }
 
 
+const DefaultForeground = 191
+const DefaultBackground = 184
 const App = {
   map: new Map,
   mouse: null,
@@ -74,8 +137,8 @@ const App = {
   mouseButtons: 0,
   paint: {
     char: 1,
-    fg: 191,
-    bg: 184,
+    fg: DefaultForeground,
+    bg: DefaultBackground,
   },
   apply: {
     glyph: true,
@@ -436,12 +499,66 @@ const App = {
       keydown: (code, mods) => mods && code === 'KeyV' && App.selectTool('paste'),
     }),
 
+    // -- Info --
+    {
+      x: 0,
+      y: 49, // TODO: move down
+      draw(ctx) {
+        const title = 'Info';
+        [...title].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+        })
+        const borderFg = App.skin.borders
+        const borderBg = App.skin.background
+        const height = 3
+        const width = 16
+        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+        for (let i = 0; i < height; i++) {
+          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+        }
+        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+        for (let i = 0; i < width; i++)
+          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+        for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+          ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+
+        ;[...`${App.paint.char.toString(16).padStart(2, '0')}`].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), 1 + i, 1, WHITE)
+        })
+      },
+    },
+
+
     // -- Canvas --
     {
       x: 18,
       y: 0,
       width: Infinity,
       height: Infinity,
+      joinedCellAt(x, y, get) {
+        function bdt(c) { return isSingleBoxDrawingChar(c) ? 1 : isDoubleBoxDrawingChar(c) ? 2 : 0 }
+        const c = get(x, y)
+        const boxDrawingType = bdt(c)
+        const connectLeft = bdt(get(x-1,y)) === boxDrawingType
+        const connectRight = bdt(get(x+1,y)) === boxDrawingType
+        const connectUp = bdt(get(x,y-1)) === boxDrawingType
+        const connectDown = bdt(get(x,y+1)) === boxDrawingType
+        if (!(connectLeft || connectRight || connectUp || connectDown)) return c
+        const char =
+          boxDrawingType === 0
+          ? c
+          : boxDrawingType === 1
+            ? boxDrawingChar(connectLeft, connectUp, connectRight, connectDown)
+            : boxDrawingDoubleChar(connectLeft, connectUp, connectRight, connectDown)
+        return char
+      },
       draw(ctx) {
         for (const [k, v] of App.map.entries()) {
           const [x, y] = k.split(',')
@@ -455,8 +572,21 @@ const App = {
         }
         if (this.tmouse) {
           if (App.tool === 'cell') {
-            const { char = ' '.charCodeAt(0), fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
-            ctx.drawChar(char, this.tmouse.x, this.tmouse.y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+            if (App.toolOptions.joinCells) {
+              const {x, y} = this.tmouse
+              const get = (tx, ty) => {
+                if (tx === x && ty === y && App.apply.glyph) return App.paint.char
+                else return App.map.get(`${tx},${ty}`)?.char ?? 0
+              }
+              const {fg, bg} = this.applied(x, y)
+              for (const [dx, dy] of [[0,0],[-1,0],[0,-1],[1,0],[0,1]]) {
+                const char = this.joinedCellAt(x+dx, y+dy, get)
+                ctx.drawChar(char, x+dx, y+dy, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+              }
+            } else {
+              const { char = ' '.charCodeAt(0), fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
+              ctx.drawChar(char, this.tmouse.x, this.tmouse.y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+            }
           }
           if (App.tool === 'line' && this.toolStart) {
             bresenhamLine(this.toolStart.x, this.toolStart.y, this.tmouse.x, this.tmouse.y, (x, y) => {
@@ -486,7 +616,20 @@ const App = {
       },
       paint(x, y) {
         bresenhamLine(this.lastPaint.x, this.lastPaint.y, x, y, (x, y) => {
-          App.map.set(`${x},${y}`, this.applied(x, y))
+          if (App.toolOptions.joinCells && App.apply.glyph) {
+            const {x, y} = this.tmouse
+            const get = (tx, ty) => {
+              if (tx === x && ty === y && App.apply.glyph) return App.paint.char
+              else return App.map.get(`${tx},${ty}`)?.char ?? 0
+            }
+            for (const [dx, dy] of [[0,0],[-1,0],[0,-1],[1,0],[0,1]]) {
+              const char = this.joinedCellAt(x+dx, y+dy, get)
+              const applied = {...this.applied(x + dx, y + dy), char}
+              App.map.set(`${x+dx},${y+dy}`, applied)
+            }
+          } else {
+            App.map.set(`${x},${y}`, this.applied(x, y))
+          }
         })
         this.lastPaint = { x, y }
       },
@@ -500,9 +643,9 @@ const App = {
           }
         } else if (button === 2) {
           const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
-          if (App.apply.glyph) App.paint.char = paint.char
-          if (App.apply.fg) App.paint.fg = paint.fg
-          if (App.apply.bg) App.paint.bg = paint.bg
+          if (App.apply.glyph) App.paint.char = paint.char ?? 0
+          if (App.apply.fg) App.paint.fg = paint.fg ?? DefaultForeground
+          if (App.apply.bg) App.paint.bg = paint.bg ?? DefaultBackground
         }
       },
       mouseup(x, y, button) {
