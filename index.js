@@ -500,9 +500,9 @@ const App = {
                 if (tx === x && ty === y && App.apply.glyph) return App.paint.char
                 else return App.map.get(`${tx},${ty}`)?.char ?? 0
               }
-              const {fg, bg} = this.applied(x, y)
-              for (const [dx, dy] of [[0,0],[-1,0],[0,-1],[1,0],[0,1]]) {
-                const char = this.joinedCellAt(x+dx, y+dy, get)
+              const {fg, bg, char: appliedChar} = this.applied(x, y)
+              for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
+                const char = App.apply.glyph ? this.joinedCellAt(x+dx, y+dy, get) : appliedChar
                 ctx.drawChar(char, x+dx, y+dy, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
               }
             } else {
@@ -544,9 +544,10 @@ const App = {
               if (tx === x && ty === y && App.apply.glyph) return App.paint.char
               else return App.map.get(`${tx},${ty}`)?.char ?? 0
             }
-            for (const [dx, dy] of [[0,0],[-1,0],[0,-1],[1,0],[0,1]]) {
+            for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
               const char = this.joinedCellAt(x+dx, y+dy, get)
-              const applied = {...this.applied(x + dx, y + dy), char}
+              const applied = {...this.applied(x + dx, y + dy)}
+              if (App.apply.glyph) applied.char = char
               App.map.set(`${x+dx},${y+dy}`, applied)
             }
           } else {
