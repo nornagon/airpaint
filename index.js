@@ -239,6 +239,7 @@ const App = {
         [...' Glyph '].forEach((c, i) => {
           ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
         })
+        ctx.drawChar(App.paint.char, 6, 0, WHITE)
       },
       mousedown(_x, _y, button) {
         if (button === 0) {
@@ -319,6 +320,12 @@ const App = {
       },
       mousedown(x, y, button) {
         if (button === 0) this.paint(x, y)
+        if (button === 2) {
+          const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
+          if (App.apply.glyph) App.paint.char = paint.char
+          if (App.apply.fg) App.paint.fg = paint.fg
+          if (App.apply.bg) App.paint.bg = paint.bg
+        }
       },
       mousemove(x, y, buttons) {
         if (buttons & 1) this.paint(x, y)
@@ -362,8 +369,34 @@ const App = {
         if (el.mousedown)
           el.mousedown(x - el.x, y - el.y, button)
     }
-  }
+  },
+  keydown(code) {
+    if (code === 'KeyG') App.apply.glyph = !App.apply.glyph
+    if (code === 'KeyF') App.apply.fg = !App.apply.fg
+    if (code === 'KeyB') App.apply.bg = !App.apply.bg
+    if (code === 'ArrowUp') {
+      const y = (App.paint.char / 16)|0
+      const x = App.paint.char % 16
+      App.paint.char = ((y + 15) % 16) * 16 + x
+    }
+    if (code === 'ArrowDown') {
+      const y = (App.paint.char / 16)|0
+      const x = App.paint.char % 16
+      App.paint.char = ((y + 1) % 16) * 16 + x
+    }
+    if (code === 'ArrowLeft') {
+      const y = (App.paint.char / 16)|0
+      const x = App.paint.char % 16
+      App.paint.char = y * 16 + (x + 15) % 16
+    }
+    if (code === 'ArrowRight') {
+      const y = (App.paint.char / 16)|0
+      const x = App.paint.char % 16
+      App.paint.char = y * 16 + (x + 1) % 16
+    }
+  },
 }
+window.App = App
 
 function start() {
   App.init()
@@ -484,6 +517,11 @@ function start() {
   window.addEventListener('blur', () => {
     App.mouseButtons = 0
     App.mouse = null
+    dirty()
+  })
+
+  window.addEventListener('keydown', (e) => {
+    App.keydown(e.code)
     dirty()
   })
 }
