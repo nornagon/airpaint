@@ -47,6 +47,50 @@ function button({title, active, click, ...rest}) {
   }
 }
 
+function textToolOverlay({x, y}) {
+  // TODO: hidden textarea...?
+  return {
+    x,
+    y,
+    height: 1,
+    text: '',
+    offset() {
+      return App.ui.find(e => e.name === 'canvas').x
+    },
+    draw(ctx) {
+      const offset = this.offset()
+      for (let i = 0; i < this.text.length; i++) {
+        const { char = 0x20, fg, bg } = this.applied(this.x + i - offset, this.y, this.text.charCodeAt(i))
+        ctx.drawChar(char, i, 0, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+      }
+      ctx.drawChar('_'.charCodeAt(0), this.text.length, 0, WHITE, BLACK)
+    },
+    captureKeys: true,
+    exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
+    keydown(code) {
+      if (code === 'Escape') this.exit()
+      if (code === 'Backspace') this.text = this.text.substring(0, this.text.length - 1)
+    },
+    keypress(key) {
+      if (key === 'Enter') {
+        const offset = this.offset()
+        for (let i = 0; i < this.text.length; i++) {
+          App.map.set(`${this.x+i - offset},${this.y}`, this.applied(this.x + i - offset, this.y, this.text.charCodeAt(i)))
+        }
+        this.exit()
+      }
+      this.text += key
+    },
+    applied(x, y, c) {
+      const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
+      if (App.apply.glyph) paint.char = c
+      if (App.apply.fg) paint.fg = App.paint.fg
+      if (App.apply.bg) paint.bg = App.paint.bg
+      return paint
+    },
+  }
+}
+
 
 const DefaultForeground = 191
 const DefaultBackground = 184
@@ -460,6 +504,7 @@ const App = {
 
     // -- Canvas --
     {
+      name: 'canvas',
       x: 18,
       y: 0,
       width: Infinity,
@@ -569,6 +614,8 @@ const App = {
             this.paint(x, y)
           } else if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval') {
             this.toolStart = { x, y }
+          } else if (App.tool === 'text') {
+            App.ui.push(textToolOverlay({x: this.x + x, y: this.y + y}))
           }
         } else if (button === 2) {
           const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
@@ -664,6 +711,11 @@ const App = {
   },
   keydown(code, mods) {
     for (const el of this.ui)
+      if (el.captureKeys) {
+        if (el.keydown) el.keydown(code, mods)
+        return
+      }
+    for (const el of this.ui)
       if (el.keydown)
         el.keydown(code, mods)
     if (code === 'KeyG') App.apply.glyph = !App.apply.glyph
@@ -689,6 +741,16 @@ const App = {
       const x = App.paint.char % 16
       App.paint.char = y * 16 + (x + 1) % 16
     }
+  },
+  keypress(key) {
+    for (const el of this.ui)
+      if (el.captureKeys) {
+        if (el.keypress) el.keypress(key)
+        return
+      }
+    for (const el of this.ui)
+      if (el.keypress)
+        el.keypress(key)
   },
   blur() {
     for (const el of this.ui)
@@ -824,6 +886,11 @@ function start() {
 
   window.addEventListener('keydown', (e) => {
     App.keydown(e.code, e.ctrlKey || e.metaKey /* TODO */)
+    dirty()
+  })
+
+  window.addEventListener('keypress', (e) => {
+    App.keypress(e.key)
     dirty()
   })
 }
