@@ -34,7 +34,7 @@ function button({title, active, click, ...rest}) {
   return {
     height: 1,
     draw(ctx) {
-      const fg = active() ? App.skin.buttons.active : App.skin.buttons.inactive;
+      const fg = active ? active() ? App.skin.buttons.active : App.skin.buttons.inactive : App.skin.buttons.usable;
       const bg = this.tmouse ? App.skin.buttons.highlight : null;
       [...title()].forEach((c, i) => {
         ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
@@ -319,42 +319,79 @@ const App = {
           ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
       },
     },
-    {
+    button({
       x: 1,
       y: 34,
       width: 7,
-      height: 1,
-      draw(ctx) {
-        const bg = this.tmouse ? App.skin.buttons.highlight : App.skin.background;
-        [...' Undo  '].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), i, 0, App.skin.buttons.usable, bg)
-        })
-      },
-      mousedown(_x, _y, button) {
-        if (button === 0) App.undo()
-      },
+      title() { return ' Undo  ' },
+      click() { App.undo() },
       keydown(code, mods) {
         if (mods && code === 'KeyZ') App.undo()
       },
-    },
-    {
+    }),
+    button({
       x: 1,
       y: 35,
       width: 7,
-      height: 1,
-      draw(ctx) {
-        const bg = this.tmouse ? App.skin.buttons.highlight : App.skin.background;
-        [...' Redo  '].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), i, 0, App.skin.buttons.usable, bg)
-        })
-      },
-      mousedown(_x, _y, button) {
-        if (button === 0) App.redo()
-      },
+      title() { return ' Redo  ' },
+      click() { App.redo() },
       keydown(code, mods) {
         if (mods && code === 'KeyY') App.redo()
       },
+    }),
+
+    // -- Image --
+    {
+      x: 0,
+      y: 41,
+      draw(ctx) {
+        const title = 'Image';
+        [...title].forEach((c, i) => {
+          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+        })
+        const borderFg = App.skin.borders
+        const borderBg = App.skin.background
+        const height = 6
+        const width = 7
+        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+        for (let i = 0; i < height; i++) {
+          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+        }
+        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+        for (let i = 0; i < width; i++)
+          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+        for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+          ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+      },
     },
+    button({
+      x: 1,
+      y: 42,
+      width: 7,
+      title() { return ' New   ' },
+      click() { },
+    }),
+    button({
+      x: 1,
+      y: 43,
+      width: 7,
+      title() { return ' Save  ' },
+      click() { },
+    }),
+    button({
+      x: 1,
+      y: 44,
+      width: 7,
+      title() { return ' Export' },
+      click() { },
+    }),
 
     // -- Apply --
     {
