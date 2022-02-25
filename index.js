@@ -2,6 +2,7 @@ import { SpriteBatch, Texture, ImageTextureSource, createProgram } from './gl.js
 import { apcaContrast } from './contrast.js'
 import { bresenhamLine, ellipse, filledEllipse } from './bresenham.js'
 import { BoxDrawing, boxDrawingChar, boxDrawingDoubleChar, isSingleBoxDrawingChar, isDoubleBoxDrawingChar } from './cp437.js'
+import * as idb from './idb.js'
 
 const fontConfig = parseFontConfig(await fetch('fonts/_config.xt').then(t => t.text()))
 
@@ -124,16 +125,19 @@ const App = {
   finishChange() {
     if (!this.changing) return
     this.changing = false
+    idb.setItem('art', this.map)
   },
   undo() {
     if (this.changing || !this.undoStack.length) return
     this.redoStack.push(this.map)
     this.map = this.undoStack.pop()
+    idb.setItem('art', this.map)
   },
   redo() {
     if (this.changing || !this.redoStack.length) return
     this.undoStack.push(this.map)
     this.map = this.redoStack.pop()
+    idb.setItem('art', this.map)
   },
   mouse: null,
   get tmouse() {
@@ -1013,6 +1017,9 @@ window.App = App
 
 async function start() {
   App.init()
+  const art = await idb.getItem('art')
+  if (art)
+    App.map = art
   App.fontIdx = 0
   await App.setFont(fontConfig[0])
   const canvas = document.createElement('canvas')
