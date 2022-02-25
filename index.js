@@ -2,17 +2,32 @@ import { SpriteBatch, Texture, ImageTextureSource, createProgram } from './gl.js
 import { apcaContrast } from './contrast.js'
 import { bresenhamLine, ellipse, filledEllipse } from './bresenham.js'
 import { BoxDrawing, boxDrawingChar, boxDrawingDoubleChar, isSingleBoxDrawingChar, isDoubleBoxDrawingChar } from './cp437.js'
-const tileset = {
-  image: 'fonts/cp437_8x8.png',
-  tileWidth: 8,
-  tileHeight: 8,
-}
 
-const font = new Image
-font.src = tileset.image
-await new Promise(resolve => {
-  font.onload = resolve
-})
+const fontConfig = parseFontConfig(await fetch('fonts/_config.xt').then(t => t.text()))
+
+function parseFontConfig(text) {
+  const fonts = []
+  for (const line of text.split(/\n/).map(l => l.replace(/\/\/.*/, '').trim()).filter(x => x)) {
+    const [name, guiFile, guiColumns, guiRows, artFile, artColumns, artRows, unicode, mirror, available] = line.split(/\t+/)
+    fonts.push({
+      name,
+      gui: {
+        file: guiFile,
+        columns: +guiColumns,
+        rows: +guiRows,
+      },
+      art: {
+        file: artFile,
+        columns: +artColumns,
+        rows: +artRows,
+      },
+      unicode,
+      mirror,
+      available
+    })
+  }
+  return fonts
+}
 
 const WHITE = {r: 1, g: 1, b: 1}
 const BLACK = {r: 0, g: 0, b: 0}
@@ -35,7 +50,7 @@ function button({title, active, click, ...rest}) {
     height: 1,
     draw(ctx) {
       const fg = active ? active() ? App.skin.buttons.active : App.skin.buttons.inactive : App.skin.buttons.usable;
-      const bg = this.tmouse ? App.skin.buttons.highlight : null;
+      const bg = this.tmouse ? App.skin.buttons.highlight : App.skin.background;
       [...title()].forEach((c, i) => {
         ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
       })
@@ -122,7 +137,7 @@ const App = {
   },
   mouse: null,
   get tmouse() {
-    return this.mouse ? { x: (this.mouse.x / tileset.tileWidth)|0, y: (this.mouse.y / tileset.tileHeight)|0 } : null;
+    return this.mouse ? { x: (this.mouse.x / App.font.tileWidth)|0, y: (this.mouse.y / App.font.tileHeight)|0 } : null;
   },
   mouseButtons: 0,
   paint: {
@@ -182,8 +197,10 @@ const App = {
           ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
         }
         ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
-        for (let i = 0; i < width; i++)
+        for (let i = 0; i < width - 4; i++)
           ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing.LU_D, width - 3, height + 1, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing._URD, width, height + 1, borderFg, borderBg)
         ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
         ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
         ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
@@ -214,6 +231,30 @@ const App = {
         }
       }
     },
+    button({
+      x: 14,
+      y: 18,
+      width: 1,
+      title() { return '<' },
+      click() {
+        const newIdx = (App.fontIdx + fontConfig.length - 1) % fontConfig.length
+        App.fontIdx = newIdx
+        const newFont = fontConfig[newIdx]
+        App.setFont(newFont).then(App.requestRedraw)
+      },
+    }),
+    button({
+      x: 15,
+      y: 18,
+      width: 1,
+      title() { return '>' },
+      click() {
+        const newIdx = (App.fontIdx + 1) % fontConfig.length
+        App.fontIdx = newIdx
+        const newFont = fontConfig[newIdx]
+        App.setFont(newFont).then(App.requestRedraw)
+      },
+    }),
 
     // -- Palette --
     {
@@ -860,6 +901,20 @@ const App = {
       },
     },
   ],
+  async setFont(font) {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image
+      img.src = `fonts/${font.art.file}.png`
+      img.onload = () => resolve(img)
+      img.onerror = reject
+    })
+
+    this.font = {
+      image,
+      tileWidth: image.width / font.art.columns,
+      tileHeight: image.height / font.art.rows,
+    }
+  },
   init() {
     for (const el of this.ui)
       Object.setPrototypeOf(el, {
@@ -876,7 +931,7 @@ const App = {
       if (el.draw) {
         el.draw({
           drawChar(c, x, y, fg, bg) {
-            drawChar(c, x + el.x, y + el.y, fg, bg)
+            drawChar(App.font.image, c, x + el.x, y + el.y, fg, bg)
           }
         })
       }
@@ -956,15 +1011,16 @@ const App = {
 }
 window.App = App
 
-function start() {
+async function start() {
   App.init()
+  App.fontIdx = 0
+  await App.setFont(fontConfig[0])
   const canvas = document.createElement('canvas')
   canvas.style.width = '100%'
   canvas.style.height = '100%'
   canvas.style.imageRendering = 'pixelated'
   document.body.appendChild(canvas)
   const gl = canvas.getContext('webgl')
-  const tex = new Texture(gl, new ImageTextureSource(font))
   const prog = createProgram(gl,
     `
       #version 100
@@ -1019,6 +1075,14 @@ function start() {
     })
     isDirty = true
   }
+  App.requestRedraw = dirty
+
+  const textureForImage = new WeakMap
+  function getTexture(img) {
+    if (!textureForImage.get(img))
+      textureForImage.set(img, new Texture(gl, new ImageTextureSource(img)))
+    return textureForImage.get(img)
+  }
 
   function draw() {
     gl.viewport(0, 0, canvas.width, canvas.height)
@@ -1030,8 +1094,9 @@ function start() {
     gl.clearColor(0, 0, 0, 1)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-    function drawChar(c, dx, dy, fg, bg) {
-      const tw = tileset.tileWidth, th = tileset.tileHeight
+    function drawChar(img, c, dx, dy, fg, bg) {
+      const tex = getTexture(img)
+      const tw = App.font.tileWidth, th = App.font.tileHeight
       const sx = c % 16
       const sy = (c / 16) | 0
       if (bg != null) {
@@ -1047,8 +1112,8 @@ function start() {
 
     console.time('draw')
     spriteBatch.begin()
-    App.draw((c, tx, ty, fg, bg) => {
-      drawChar(c, tx * tileset.tileWidth, ty * tileset.tileHeight, fg, bg)
+    App.draw((img, c, tx, ty, fg, bg) => {
+      drawChar(img, c, tx * App.font.tileWidth, ty * App.font.tileHeight, fg, bg)
     })
     spriteBatch.end()
     console.timeEnd('draw')
