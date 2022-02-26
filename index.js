@@ -1289,8 +1289,16 @@ const App = {
           } else {
             const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
             if (App.apply.glyph) App.paint.char = paint.char ?? 0
-            if (App.apply.fg) App.paint.fg = paint.fg ?? DefaultForeground
-            if (App.apply.bg) App.paint.bg = paint.bg ?? DefaultBackground
+            if (App.apply.fg) {
+              App.paint.fg = paint.fg ?? DefaultForeground
+              const idx = palette.findIndex(c => c.r === App.paint.fg.r && c.g === App.paint.fg.g && c.b === App.paint.fg.g)
+              if (idx >= 0) App.selectedPalette.fg = idx
+            }
+            if (App.apply.bg) {
+              App.paint.bg = paint.bg ?? DefaultBackground
+              const idx = palette.findIndex(c => c.r === App.paint.bg.r && c.g === App.paint.bg.g && c.b === App.paint.bg.g)
+              if (idx >= 0) App.selectedPalette.bg = idx
+            }
           }
         }
       },
