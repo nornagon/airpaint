@@ -1273,10 +1273,14 @@ const App = {
             this.paste(x, y)
           }
         } else if (button === 2) {
-          const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
-          if (App.apply.glyph) App.paint.char = paint.char ?? 0
-          if (App.apply.fg) App.paint.fg = paint.fg ?? DefaultForeground
-          if (App.apply.bg) App.paint.bg = paint.bg ?? DefaultBackground
+          if (this.toolStart) {
+            this.toolStart = null
+          } else {
+            const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
+            if (App.apply.glyph) App.paint.char = paint.char ?? 0
+            if (App.apply.fg) App.paint.fg = paint.fg ?? DefaultForeground
+            if (App.apply.bg) App.paint.bg = paint.bg ?? DefaultBackground
+          }
         }
       },
       mouseup(x, y, button) {
