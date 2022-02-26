@@ -3,6 +3,7 @@ import { apcaContrast } from './contrast.js'
 import { bresenhamLine, ellipse, filledEllipse } from './bresenham.js'
 import { BoxDrawing, boxDrawingChar, boxDrawingDoubleChar, isSingleBoxDrawingChar, isDoubleBoxDrawingChar } from './cp437.js'
 import * as idb from './idb.js'
+import * as xp from './xp.js'
 
 const MAX_UNDO_STEPS = 2048
 
@@ -617,9 +618,7 @@ const App = {
           y: 41,
           draw(ctx) {
             const title = 'Image';
-            [...title].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
-            })
+            ctx.drawText(title, 2, 0, WHITE)
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
             const height = 6
@@ -655,21 +654,69 @@ const App = {
               redoStack: [],
             })
             App.selectedFile = App.files.length - 1
+            App.save()
           },
-        }),
-        button({
-          x: 1,
-          y: 43,
-          width: 7,
-          title() { return ' Save  ' },
-          click() { },
         }),
         button({
           x: 1,
           y: 44,
           width: 7,
           title() { return ' Export' },
-          click() { },
+          async click() {
+            if (window.showSaveFilePicker) {
+              const handle = await window.showSaveFilePicker({
+                suggestedName: App.files[App.selectedFile].name + '.xp',
+                types: [
+                  {
+                    description: 'REXPaint Files',
+                    accept: {
+                      'application/octet-stream+rexpaint': ['.xp'],
+                    },
+                  },
+                ],
+              }).catch(() => null)
+              if (handle) {
+                const writable = await handle.createWritable()
+                const rxpBlob = await xp.write({
+                  version: 0xffffffff,
+                  layers: [
+                    {
+                      data: new Map([...App.map.entries()].map(([k, v]) => [k, {
+                        char: v.char,
+                        fg: v.fg ? palette[v.fg] : null,
+                        bg: v.bg ? palette[v.bg] : null,
+                      }]))
+                    }
+                  ],
+                })
+                const buf = await rxpBlob.arrayBuffer()
+                await writable.write(buf)
+                await writable.close()
+              }
+            } else {
+              const a = document.createElement('a')
+              const rxpBlob = await xp.write({
+                version: 0xffffffff,
+                layers: [
+                  {
+                    data: new Map([...App.map.entries()].map(([k, v]) => [k, {
+                      char: v.char,
+                      fg: v.fg ? palette[v.fg] : null,
+                      bg: v.bg ? palette[v.bg] : null,
+                    }]))
+                  }
+                ],
+              })
+              const url = URL.createObjectURL(rxpBlob)
+              try {
+                a.href = url
+                a.setAttribute('download', App.files[App.selectedFile].name + '.xp')
+                a.click()
+              } finally {
+                URL.revokeObjectURL(url)
+              }
+            }
+          },
         }),
 
         // -- Apply --
