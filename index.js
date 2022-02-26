@@ -955,8 +955,22 @@ const App = {
             for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
               ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
 
-            ctx.drawText(`C:${App.paint.char.toString(16).padStart(2, '0')}`, 1, 1, App.skin.info)
-            //ctx.drawText(`MEM:${(performance.memory.usedJSHeapSize/1024/1024)|0}M`, 1, 3, WHITE)
+            if (App.paint.fg) {
+              const {r, g, b} = palette[App.paint.fg]
+              ctx.drawText(`Fore`, 1, 1, {r: 0.5,g:0.5,b:0.5})
+              ctx.drawText(`${[r,g,b].map(c => ((c*255)|0).toString().padStart(3, ' ')).join(' ')}`, 6, 1, App.skin.headers)
+            }
+            if (App.paint.bg) {
+              const {r, g, b} = palette[App.paint.bg]
+              ctx.drawText(`Back`, 1, 2, {r: 0.5,g:0.5,b:0.5})
+              ctx.drawText(`${[r,g,b].map(c => ((c*255)|0).toString().padStart(3, ' ')).join(' ')}`, 6, 2, App.skin.headers)
+            }
+            ctx.drawText(`MEM:${(performance.memory.usedJSHeapSize/1024/1024)|0}M`, 1, 3, {r: 0.5,g:0.5,b:0.5})
+            if (App.tmouse) {
+              const offset = App.ui.find(e => e.name === 'canvas').x
+              const coords = `${App.tmouse.x - offset},${App.tmouse.y}`
+              ctx.drawText(coords, 17 - coords.length, 3, App.skin.headers)
+            }
           },
         },
       ],
