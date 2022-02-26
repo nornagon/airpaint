@@ -551,7 +551,7 @@ const App = {
                 const cw = Math.abs(apcaContrast(WHITE, color))
                 const cb = Math.abs(apcaContrast(BLACK, color))
                 const wb = cb > cw ? BLACK : WHITE
-                ctx.drawText('f', x, y, wb)
+                ctx.drawText(i === App.selectedPalette.bg ? 'x' : 'f', x, y, wb)
               } else if (i === App.selectedPalette.bg) {
                 const cw = Math.abs(apcaContrast(WHITE, color))
                 const cb = Math.abs(apcaContrast(BLACK, color))
