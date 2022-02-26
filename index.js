@@ -4,6 +4,8 @@ import { bresenhamLine, ellipse, filledEllipse } from './bresenham.js'
 import { BoxDrawing, boxDrawingChar, boxDrawingDoubleChar, isSingleBoxDrawingChar, isDoubleBoxDrawingChar } from './cp437.js'
 import * as idb from './idb.js'
 
+const MAX_UNDO_STEPS = 2048
+
 const fontConfig = parseFontConfig(await fetch('fonts/_config.xt').then(t => t.text()))
 
 function parseFontConfig(text) {
@@ -196,6 +198,8 @@ const App = {
     if (this.changing) return
     this.changing = true
     this.undoStack.push(new Map(this.map))
+    while (this.undoStack.length > MAX_UNDO_STEPS)
+      this.undoStack.shift()
     this.redoStack = []
   },
   finishChange() {
@@ -818,9 +822,8 @@ const App = {
             for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
               ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
 
-            ;[...`${App.paint.char.toString(16).padStart(2, '0')}`].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 1 + i, 1, WHITE)
-            })
+            ctx.drawText(`C:${App.paint.char.toString(16).padStart(2, '0')}`, 1, 1, WHITE)
+            //ctx.drawText(`MEM:${(performance.memory.usedJSHeapSize/1024/1024)|0}M`, 1, 3, WHITE)
           },
         },
       ],
