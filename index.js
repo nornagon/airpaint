@@ -615,8 +615,8 @@ const App = {
           width: 7,
           title() { return ' Undo  ' },
           click() { App.undo() },
-          keydown(code, mods) {
-            if (mods && code === 'KeyZ') App.undo()
+          keydown(code) {
+            if (code === 'KeyZ') App.undo()
           },
         }),
         button({
@@ -625,8 +625,8 @@ const App = {
           width: 7,
           title() { return ' Redo  ' },
           click() { App.redo() },
-          keydown(code, mods) {
-            if (mods && code === 'KeyY') App.redo()
+          keydown(code) {
+            if (code === 'KeyY') App.redo()
           },
         }),
 
