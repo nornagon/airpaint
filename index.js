@@ -709,6 +709,31 @@ const App = {
                   console.error(`Error importing ${handle.name}`, e)
                 }
               }
+              if (handles.length) App.save()
+            } else {
+              const input = document.createElement('input')
+              input.type = 'file'
+              input.setAttribute('multiple', 'multiple')
+              input.setAttribute('accept', '.xp')
+              input.click()
+              input.onchange = async () => {
+                for (const f of input.files) {
+                  try {
+                    const { layers } = await xp.read(f)
+                    if (layers.length > 0) {
+                      const layer = layers[0]
+                      const file = newFile()
+                      file.name = f.name
+                      file.data = layer.data
+                      App.files.push(file)
+                      App.selectedFile = App.files.length - 1
+                    }
+                  } catch (e) {
+                    console.error(`Error importing ${f.name}`, e)
+                  }
+                }
+                if (input.files.length) App.save()
+              }
             }
           },
         }),
