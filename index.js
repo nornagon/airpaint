@@ -154,6 +154,7 @@ function renameDialog(file) {
     keypress(key) {
       if (key === 'Enter') {
         file.name = this.text
+        App.save()
         this.exit()
         return
       }
@@ -869,10 +870,10 @@ const App = {
           draw(ctx) {
             App.files.forEach((f, i) => {
               const fg = i === App.selectedFile ? App.skin.buttons.active : App.skin.buttons.inactive
-              if (i === this.tmouse?.y) {
-                ctx.drawText(' '.repeat(16), 0, i, null, App.skin.buttons.highlight)
-              }
-              ctx.drawText(f.name, 1, i, fg, null)
+              const hovered = this.tmouse?.y === i
+              const bg = hovered ? App.skin.buttons.highlight : null
+              const text = f.name.length <= 15 || hovered ? f.name : f.name.substring(0, 9) + '...' + f.name.substring(f.name.length - 3, f.name.length)
+              ctx.drawText((' ' + text).padEnd(15, ' '), 0, i, fg, bg)
             })
           },
           mousedown(_x, y, button) {
