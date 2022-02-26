@@ -97,7 +97,7 @@ function textToolOverlay({x, y}) {
       lines.forEach((line, y) => {
         for (let i = 0; i < line.length; i++) {
           const { char = 0x20, fg, bg } = this.applied(this.x + i - offset, this.y + y, line.charCodeAt(i))
-          ctx.drawChar(char, i, y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+          ctx.drawChar(char, i, y, fg, bg)
         }
         if (y === lines.length - 1)
           ctx.drawText('_', line.length, y, WHITE, BLACK)
@@ -272,8 +272,8 @@ function deleteDialog(file) {
 }
 
 
-const DefaultForeground = 191
-const DefaultBackground = 184
+const DefaultForeground = { r: 0, g: 0, b: 0 }
+const DefaultBackground = { r: 1, g: 0, b: 1 }
 const App = {
   sidebar: 'paint',
   files: [
@@ -335,6 +335,10 @@ const App = {
     char: 1,
     fg: DefaultForeground,
     bg: DefaultBackground,
+  },
+  selectedPalette: {
+    fg: null,
+    bg: null,
   },
   apply: {
     glyph: true,
@@ -500,9 +504,8 @@ const App = {
           x: 0,
           y: 19,
           draw(ctx) {
-            [...'Palette'].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, App.skin.headers, App.skin.background)
-            })
+            const title = 'Palette'
+            ctx.drawText(title, 2, 0, App.skin.headers, App.skin.background)
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
             const height = 12
@@ -518,8 +521,8 @@ const App = {
             ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
             ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
             ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
-            ctx.drawChar(BoxDrawing._URD, 1 + 'Palette'.length + 1, 0, borderFg, borderBg)
-            for (let i = 1 + 'Palette'.length + 1 + 1; i < width + 1; i++)
+            ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+            for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
               ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
           }
         },
@@ -533,39 +536,46 @@ const App = {
               const i = y * 16 + x
               const color = palette[i]
               ctx.drawChar(0, x, y, null, color)
-              if (i === App.paint.fg) {
+              if (i === App.selectedPalette.fg) {
                 const cw = Math.abs(apcaContrast(WHITE, color))
                 const cb = Math.abs(apcaContrast(BLACK, color))
                 const wb = cb > cw ? BLACK : WHITE
-                ctx.drawChar('f'.charCodeAt(0), x, y, wb)
-              } else if (i === App.paint.bg) {
+                ctx.drawText('f', x, y, wb)
+              } else if (i === App.selectedPalette.bg) {
                 const cw = Math.abs(apcaContrast(WHITE, color))
                 const cb = Math.abs(apcaContrast(BLACK, color))
                 const wb = cb > cw ? BLACK : WHITE
-                ctx.drawChar('b'.charCodeAt(0), x, y, wb)
+                ctx.drawText('b', x, y, wb)
               }
             }
           },
           mousedown(x, y, button) {
             this.mouseWentDownInPalette = true
             if (button === 0) {
-              App.paint.fg = y * 16 + x
+              App.paint.fg = palette[y * 16 + x]
+              App.selectedPalette.fg = y * 16 + x
             } else if (button === 2) {
-              App.paint.bg = y * 16 + x
+              App.paint.bg = palette[y * 16 + x]
+              App.selectedPalette.bg = y * 16 + x
             }
           },
           mousemove(x, y, buttons) {
             if (!this.mouseWentDownInPalette) return
             if (buttons & 1) {
-              App.paint.fg = y * 16 + x
+              App.paint.fg = palette[y * 16 + x]
+              App.selectedPalette.fg = y * 16 + x
             }
             if (buttons & 2) {
-              App.paint.bg = y * 16 + x
+              App.paint.bg = palette[y * 16 + x]
+              App.selectedPalette.bg = y * 16 + x
             }
           },
           mouseup() {
             this.mouseWentDownInPalette = false
-          }
+          },
+          blur() {
+            this.mouseWentDownInPalette = false
+          },
         },
 
         // -- Tools --
@@ -669,10 +679,48 @@ const App = {
           x: 1,
           y: 43,
           width: 7,
+          title() { return ' Import' },
+          async click() {
+            if (window.showOpenFilePicker) {
+              const handles = await window.showOpenFilePicker({
+                id: 'import',
+                types: [
+                  {
+                    description: 'REXPaint Files',
+                    accept: {
+                      'application/octet-stream+rexpaint': ['.xp'],
+                    },
+                  },
+                ],
+                excludeAcceptAllOption: true,
+              })
+              for (const handle of handles) {
+                try {
+                  const { layers } = await xp.read(await handle.getFile())
+                  if (layers.length > 0) {
+                    const layer = layers[0]
+                    const file = newFile()
+                    file.name = handle.name
+                    file.data = layer.data
+                    App.files.push(file)
+                    App.selectedFile = App.files.length - 1
+                  }
+                } catch (e) {
+                  console.error(`Error importing ${handle.name}`, e)
+                }
+              }
+            }
+          },
+        }),
+        button({
+          x: 1,
+          y: 44,
+          width: 7,
           title() { return ' Export' },
           async click() {
             if (window.showSaveFilePicker) {
               const handle = await window.showSaveFilePicker({
+                id: 'save',
                 suggestedName: App.files[App.selectedFile].name + '.xp',
                 types: [
                   {
@@ -687,15 +735,7 @@ const App = {
                 const writable = await handle.createWritable()
                 const rxpBlob = await xp.write({
                   version: 0xffffffff,
-                  layers: [
-                    {
-                      data: new Map([...App.map.entries()].map(([k, v]) => [k, {
-                        char: v.char,
-                        fg: v.fg ? palette[v.fg] : null,
-                        bg: v.bg ? palette[v.bg] : null,
-                      }]))
-                    }
-                  ],
+                  layers: [ { data: App.map } ],
                 })
                 const buf = await rxpBlob.arrayBuffer()
                 await writable.write(buf)
@@ -705,15 +745,7 @@ const App = {
               const a = document.createElement('a')
               const rxpBlob = await xp.write({
                 version: 0xffffffff,
-                layers: [
-                  {
-                    data: new Map([...App.map.entries()].map(([k, v]) => [k, {
-                      char: v.char,
-                      fg: v.fg ? palette[v.fg] : null,
-                      bg: v.bg ? palette[v.bg] : null,
-                    }]))
-                  }
-                ],
+                layers: [ { data: App.map } ],
               })
               const url = URL.createObjectURL(rxpBlob)
               try {
@@ -790,7 +822,7 @@ const App = {
             [...' Fore  '].forEach((c, i) => {
               ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
             })
-            ctx.drawChar(0, 6, 0, null, palette[App.paint.fg])
+            ctx.drawChar(0, 6, 0, null, App.paint.fg)
           },
           mousedown(_x, _y, button) {
             if (button === 0) {
@@ -812,7 +844,7 @@ const App = {
             [...' Back  '].forEach((c, i) => {
               ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
             })
-            ctx.drawChar(0, 6, 0, null, palette[App.paint.bg])
+            ctx.drawChar(0, 6, 0, null, App.paint.bg)
           },
           mousedown(_x, _y, button) {
             if (button === 0) {
@@ -968,12 +1000,12 @@ const App = {
               ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
 
             if (App.paint.fg) {
-              const {r, g, b} = palette[App.paint.fg]
+              const {r, g, b} = App.paint.fg
               ctx.drawText(`Fore`, 1, 1, {r: 0.5,g:0.5,b:0.5})
               ctx.drawText(`${[r,g,b].map(c => ((c*255)|0).toString().padStart(3, ' ')).join(' ')}`, 6, 1, App.skin.headers)
             }
             if (App.paint.bg) {
-              const {r, g, b} = palette[App.paint.bg]
+              const {r, g, b} = App.paint.bg
               ctx.drawText(`Back`, 1, 2, {r: 0.5,g:0.5,b:0.5})
               ctx.drawText(`${[r,g,b].map(c => ((c*255)|0).toString().padStart(3, ' ')).join(' ')}`, 6, 2, App.skin.headers)
             }
@@ -1090,12 +1122,7 @@ const App = {
         for (const [k, v] of App.map.entries()) {
           const [x, y] = k.split(',')
           const { char, fg, bg } = v
-          ctx.drawChar(
-            char ?? ' '.charCodeAt(0),
-            +x, +y,
-            fg != null ? palette[fg] : null,
-            bg != null ? palette[bg] : null
-          )
+          ctx.drawChar(char ?? 0x20, +x, +y, fg, bg)
         }
         if (this.tmouse) {
           if (App.tool === 'cell') {
@@ -1108,17 +1135,17 @@ const App = {
               const {fg, bg, char: appliedChar} = this.applied(x, y)
               for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
                 const char = App.apply.glyph ? this.joinedCellAt(x+dx, y+dy, get) : appliedChar
-                ctx.drawChar(char, x+dx, y+dy, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+                ctx.drawChar(char, x+dx, y+dy, fg, bg)
               }
             } else {
               const { char = ' '.charCodeAt(0), fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
-              ctx.drawChar(char, this.tmouse.x, this.tmouse.y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+              ctx.drawChar(char, this.tmouse.x, this.tmouse.y, fg, bg)
             }
           }
           if (App.tool === 'line' && this.toolStart) {
             bresenhamLine(this.toolStart.x, this.toolStart.y, this.tmouse.x, this.tmouse.y, (x, y) => {
               const { char = ' '.charCodeAt(0), fg, bg } = this.applied(x, y)
-              ctx.drawChar(char, x, y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+              ctx.drawChar(char, x, y, fg, bg)
             })
           }
           if (App.tool === 'rect' && this.toolStart) {
@@ -1129,13 +1156,13 @@ const App = {
             for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
               const { char = ' '.charCodeAt(0), fg, bg } = this.applied(x, y)
               if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
-                ctx.drawChar(char, x, y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+                ctx.drawChar(char, x, y, fg, bg)
             }
           }
           if (App.tool === 'oval' && this.toolStart) {
             (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(this.tmouse.x - this.toolStart.x), Math.abs(this.tmouse.y - this.toolStart.y), (x, y) => {
               const { char = ' '.charCodeAt(0), fg, bg } = this.applied(x, y)
-              ctx.drawChar(char, x, y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+              ctx.drawChar(char, x, y, fg, bg)
             })
           }
           if (App.tool === 'copy' && this.toolStart) {
@@ -1163,7 +1190,7 @@ const App = {
               if (App.apply.glyph) paint.char = v.char
               if (App.apply.fg) paint.fg = v.fg
               if (App.apply.bg) paint.bg = v.bg
-              ctx.drawChar(paint.char, x + this.tmouse.x, y + this.tmouse.y, paint.fg != null ? palette[paint.fg] : null, paint.bg != null ? palette[paint.bg] : null)
+              ctx.drawChar(paint.char, x + this.tmouse.x, y + this.tmouse.y, paint.fg, paint.bg)
             }
           }
         }
@@ -1258,8 +1285,7 @@ const App = {
                 })
                 App.finishChange()
               } else if (App.tool === 'copy') {
-                // TODO: should App.apply apply to copying into the pasteboard?
-                // What about cutting?
+                // TODO: should cut use App.apply?
                 const pasteboard = new Map
                 const lx = Math.min(this.toolStart.x, x)
                 const hx = Math.max(this.toolStart.x, x)
