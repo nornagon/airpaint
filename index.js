@@ -47,9 +47,23 @@ function parseREXPalette(txt) {
   return colors
 }
 
+const UiInitialized = Symbol('UiInitialized')
+function initUi(el) {
+  if (el[UiInitialized]) return
+  Object.setPrototypeOf(el, {
+    get tmouse() {
+      const atm = App.tmouse
+      if (!atm || !this.width || !this.height || atm.x < this.x || atm.y < this.y || atm.x >= this.x + this.width || atm.y >= this.y + this.height)
+        return null
+      return {x: atm.x - this.x, y: atm.y - this.y}
+    },
+    [UiInitialized]: true
+  })
+  return el
+}
 
 function button({title, active, click, ...rest}) {
-  return {
+  return initUi({
     height: 1,
     draw(ctx) {
       const fg = active ? active() ? App.skin.buttons.active : App.skin.buttons.inactive : App.skin.buttons.usable;
@@ -62,7 +76,7 @@ function button({title, active, click, ...rest}) {
       if (button === 0) click()
     },
     ...rest
-  }
+  })
 }
 
 function textToolOverlay({x, y}) {
@@ -118,10 +132,8 @@ function renameDialog(file) {
     y: 2,
     text: '',
     draw(ctx) {
-      const title = 'Enter Name';
-      [...title].forEach((c, i) => {
-        ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
-      })
+      const title = 'Enter Name'
+      ctx.drawText(title, 2, 0, WHITE)
       const borderFg = App.skin.borders
       const borderBg = App.skin.background
       const height = 1
@@ -163,18 +175,95 @@ function renameDialog(file) {
   }
 }
 
+function newFile() {
+  return {
+    name: 'unnamed',
+    data: new Map,
+    undoStack: [],
+    redoStack: [],
+  }
+}
+
+function deleteDialog(file) {
+  function doDeletion() {
+    const idx = App.files.indexOf(file)
+    if (idx >= 0) {
+      App.files.splice(idx, 1)
+      if (App.files.length === 0)
+        App.files.push(newFile())
+      while (App.selectedFile >= App.files.length)
+        App.selectedFile--
+      App.save()
+    }
+  }
+  const dialog = {
+    x: 20,
+    y: 2,
+    draw(ctx) {
+      const title = 'Confirm Deletion';
+      ctx.drawText(title, 2, 0, WHITE)
+      const borderFg = App.skin.borders
+      const borderBg = App.skin.background
+      const height = 3
+      const width = Math.max(20, file.name.length + 9)
+      ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+      for (let i = 0; i < height; i++) {
+        ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+      }
+      ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+      for (let i = 0; i < width; i++)
+        ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+      ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+      ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+      ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+      ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+      for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+        ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+        ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+
+      ctx.drawText(`Delete ${file.name}?`, 2, 1, WHITE)
+    },
+    captureKeys: true,
+    exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
+    keydown(code) {
+      if (code === 'Escape') this.exit()
+      if (code === 'Enter') {
+        doDeletion()
+        this.exit()
+      }
+    },
+    children: [
+      button({
+        x: 22,
+        y: 5,
+        width: 6,
+        title() { return 'Delete' },
+        click() {
+          doDeletion()
+          dialog.exit()
+        },
+      }),
+      button({
+        x: 29,
+        y: 5,
+        width: 6,
+        title() { return 'Cancel' },
+        click() { dialog.exit() },
+      }),
+    ],
+  }
+  return dialog
+}
+
 
 const DefaultForeground = 191
 const DefaultBackground = 184
 const App = {
   sidebar: 'paint',
   files: [
-    {
-      name: 'unnamed',
-      data: new Map,
-      undoStack: [],
-      redoStack: [],
-    }
+    newFile()
   ],
   selectedFile: 0,
   get map() {
@@ -874,12 +963,20 @@ const App = {
               const bg = hovered ? App.skin.buttons.highlight : null
               const text = f.name.length <= 15 || hovered ? f.name : f.name.substring(0, 9) + '...' + f.name.substring(f.name.length - 3, f.name.length)
               ctx.drawText((' ' + text).padEnd(15, ' '), 0, i, fg, bg)
+              if (hovered) {
+                ctx.drawText('x', 0, i, App.skin.buttons.usable)
+              }
             })
           },
-          mousedown(_x, y, button) {
+          mousedown(x, y, button) {
             if (button === 0) {
-              if (y < App.files.length)
-                App.selectedFile = y
+              if (y < App.files.length) {
+                if (x === 0) {
+                  App.ui.push(deleteDialog(App.files[y]))
+                } else {
+                  App.selectedFile = y
+                }
+              }
             } else if (button === 2) {
               if (y === App.selectedFile)
                 App.ui.push(renameDialog(App.files[App.selectedFile]))
@@ -1141,14 +1238,7 @@ const App = {
   },
   init() {
     for (const el of this.eachUiIncludingInvisible())
-      Object.setPrototypeOf(el, {
-        get tmouse() {
-          const atm = App.tmouse
-          if (!atm || !this.width || !this.height || atm.x < this.x || atm.y < this.y || atm.x >= this.x + this.width || atm.y >= this.y + this.height)
-            return null
-          return {x: atm.x - this.x, y: atm.y - this.y}
-        },
-      })
+      initUi(el)
   },
 
   *eachUiIncludingInvisible() {
