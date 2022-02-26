@@ -93,11 +93,15 @@ function textToolOverlay({x, y}) {
     },
     draw(ctx) {
       const offset = this.offset()
-      for (let i = 0; i < this.text.length; i++) {
-        const { char = 0x20, fg, bg } = this.applied(this.x + i - offset, this.y, this.text.charCodeAt(i))
-        ctx.drawChar(char, i, 0, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
-      }
-      ctx.drawChar('_'.charCodeAt(0), this.text.length, 0, WHITE, BLACK)
+      const lines = this.text.split('\n')
+      lines.forEach((line, y) => {
+        for (let i = 0; i < line.length; i++) {
+          const { char = 0x20, fg, bg } = this.applied(this.x + i - offset, this.y + y, line.charCodeAt(i))
+          ctx.drawChar(char, i, y, fg != null ? palette[fg] : null, bg != null ? palette[bg] : null)
+        }
+        if (y === lines.length - 1)
+          ctx.drawText('_', line.length, y, WHITE, BLACK)
+      })
     },
     captureKeys: true,
     exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
@@ -105,17 +109,25 @@ function textToolOverlay({x, y}) {
       if (code === 'Escape') this.exit()
       if (code === 'Backspace') this.text = this.text.substring(0, this.text.length - 1)
     },
-    keypress(key) {
-      if (key === 'Enter') {
+    keypress(e) {
+      if (e.key === 'Enter') {
+        if (e.ctrlKey || e.shiftKey) {
+          this.text += '\n'
+          return
+        }
         const offset = this.offset()
         App.beginChange()
-        for (let i = 0; i < this.text.length; i++) {
-          App.map.set(`${this.x+i - offset},${this.y}`, this.applied(this.x + i - offset, this.y, this.text.charCodeAt(i)))
-        }
+        const lines = this.text.split('\n')
+        lines.forEach((line, y) => {
+          for (let i = 0; i < line.length; i++) {
+            App.map.set(`${this.x+i - offset},${this.y + y}`, this.applied(this.x + i - offset, this.y + y, line.charCodeAt(i)))
+          }
+        })
         App.finishChange()
         this.exit()
+        return
       }
-      this.text += key
+      this.text += e.key
     },
     applied(x, y, c) {
       const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
@@ -165,14 +177,14 @@ function renameDialog(file) {
       if (code === 'Escape') this.exit()
       if (code === 'Backspace') this.text = this.text.substring(0, this.text.length - 1)
     },
-    keypress(key) {
-      if (key === 'Enter') {
+    keypress(e) {
+      if (e.key === 'Enter') {
         file.name = this.text
         App.save()
         this.exit()
         return
       }
-      this.text += key
+      this.text += e.key
     },
   }
 }
@@ -1393,15 +1405,15 @@ const App = {
       event.preventDefault()
     }
   },
-  keypress(key) {
+  keypress(e) {
     for (const el of this.eachUi())
       if (el.captureKeys) {
-        if (el.keypress) el.keypress(key)
+        if (el.keypress) el.keypress(e)
         return
       }
     for (const el of this.eachUi())
       if (el.keypress)
-        el.keypress(key)
+        el.keypress(e)
   },
   blur() {
     for (const el of this.eachUi())
@@ -1561,7 +1573,7 @@ async function start() {
   })
 
   window.addEventListener('keypress', (e) => {
-    App.keypress(e.key)
+    App.keypress(e)
     dirty()
   })
 }
