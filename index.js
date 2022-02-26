@@ -109,13 +109,89 @@ function textToolOverlay({x, y}) {
   }
 }
 
+function renameDialog(file) {
+  // TODO: hidden textarea...?
+  return {
+    x: 20,
+    y: 2,
+    text: '',
+    draw(ctx) {
+      const title = 'Enter Name';
+      [...title].forEach((c, i) => {
+        ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+      })
+      const borderFg = App.skin.borders
+      const borderBg = App.skin.background
+      const height = 1
+      const width = 20
+      ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+      for (let i = 0; i < height; i++) {
+        ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+        ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+      }
+      ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+      for (let i = 0; i < width; i++)
+        ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+      ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+      ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+      ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+      ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+      for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+        ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+        ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+
+      ctx.drawText(this.text + '_', 1, 1, WHITE)
+    },
+    captureKeys: true,
+    exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
+    keydown(code) {
+      if (code === 'Escape') this.exit()
+      if (code === 'Backspace') this.text = this.text.substring(0, this.text.length - 1)
+    },
+    keypress(key) {
+      if (key === 'Enter') {
+        file.name = this.text
+        this.exit()
+        return
+      }
+      this.text += key
+    },
+  }
+}
+
 
 const DefaultForeground = 191
 const DefaultBackground = 184
 const App = {
-  map: new Map,
-  undoStack: [],
-  redoStack: [],
+  sidebar: 'paint',
+  files: [
+    {
+      name: 'unnamed',
+      data: new Map,
+      undoStack: [],
+      redoStack: [],
+    }
+  ],
+  selectedFile: 0,
+  get map() {
+    return this.files[this.selectedFile].data
+  },
+  set map(x) {
+    this.files[this.selectedFile].data = x
+  },
+  get undoStack() {
+    return this.files[this.selectedFile].undoStack
+  },
+  set undoStack(x) {
+    this.files[this.selectedFile].undoStack = x
+  },
+  get redoStack() {
+    return this.files[this.selectedFile].redoStack
+  },
+  set redoStack(x) {
+    this.files[this.selectedFile].redoStack = x
+  },
   beginChange() {
     if (this.changing) return
     this.changing = true
@@ -125,19 +201,22 @@ const App = {
   finishChange() {
     if (!this.changing) return
     this.changing = false
-    idb.setItem('art', this.map)
+    this.save()
   },
   undo() {
     if (this.changing || !this.undoStack.length) return
     this.redoStack.push(this.map)
     this.map = this.undoStack.pop()
-    idb.setItem('art', this.map)
+    this.save()
   },
   redo() {
     if (this.changing || !this.redoStack.length) return
     this.undoStack.push(this.map)
     this.map = this.redoStack.pop()
-    idb.setItem('art', this.map)
+    this.save()
+  },
+  save() {
+    idb.setItem('art', { files: this.files, selectedFile: this.selectedFile })
   },
   mouse: null,
   get tmouse() {
@@ -184,497 +263,634 @@ const App = {
     },
   },
   ui: [
-    // -- Font --
-    {
-      x: 0, y: 1,
-      draw(ctx) {
-        [...'Font'].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
-        })
-        const borderFg = App.skin.borders
-        const borderBg = App.skin.background
-        const height = 16
-        const width = 16
-        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
-        for (let i = 0; i < height; i++) {
-          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
-          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
-        }
-        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
-        for (let i = 0; i < width - 4; i++)
-          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU_D, width - 3, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing._URD, width, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing._URD, 1 + 'Font'.length + 1, 0, borderFg, borderBg)
-        for (let i = 1 + 'Font'.length + 1 + 1; i < width + 1; i++)
-          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
-      }
-    },
-    {
-      x: 1, y: 2,
-      width: 16, height: 16,
-      draw(ctx) {
-        const selectedX = App.paint.char % 16
-        const selectedY = (App.paint.char / 16)|0
-        for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-          const color =
-            (x === selectedX && y === selectedY) || (this.tmouse?.x === x && this.tmouse?.y === y)
-            ? App.skin.glyphs.selected
-            : x === selectedX || y === selectedY
-            ? App.skin.glyphs.aligned
-            : App.skin.glyphs.other
-          ctx.drawChar(y*16+x, x, y, color, App.skin.background)
-        }
-      },
-      mousedown(x, y, button) {
-        if (button === 0) {
-          App.paint.char = y * 16 + x
-        }
-      }
-    },
-    button({
-      x: 14,
-      y: 18,
-      width: 1,
-      title() { return '<' },
-      click() {
-        const newIdx = (App.fontIdx + fontConfig.length - 1) % fontConfig.length
-        App.fontIdx = newIdx
-        const newFont = fontConfig[newIdx]
-        App.setFont(newFont).then(App.requestRedraw)
-      },
-    }),
-    button({
-      x: 15,
-      y: 18,
-      width: 1,
-      title() { return '>' },
-      click() {
-        const newIdx = (App.fontIdx + 1) % fontConfig.length
-        App.fontIdx = newIdx
-        const newFont = fontConfig[newIdx]
-        App.setFont(newFont).then(App.requestRedraw)
-      },
-    }),
-
-    // -- Palette --
+    // -- [PAINT|BROWSE] --
     {
       x: 0,
-      y: 19,
+      y: 0,
       draw(ctx) {
-        [...'Palette'].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+        [...'    [     |      ]'].forEach((x, i)  => {
+          ctx.drawChar(x.charCodeAt(0), i, 0, WHITE, App.skin.background)
         })
-        const borderFg = App.skin.borders
-        const borderBg = App.skin.background
-        const height = 12
-        const width = 16
-        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
-        for (let i = 0; i < height; i++) {
-          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
-          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
-        }
-        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
-        for (let i = 0; i < width; i++)
-          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing._URD, 1 + 'Palette'.length + 1, 0, borderFg, borderBg)
-        for (let i = 1 + 'Palette'.length + 1 + 1; i < width + 1; i++)
-          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
-      }
+      },
     },
+    button({
+      x: 5,
+      y: 0,
+      width: 5,
+      title() { return 'PAINT' },
+      active() { return App.sidebar === 'paint' },
+      click() { App.sidebar = 'paint' },
+    }),
+    button({
+      x: 11,
+      y: 0,
+      width: 6,
+      title() { return 'BROWSE' },
+      active() { return App.sidebar === 'browse' },
+      click() { App.sidebar = 'browse' },
+    }),
+
     {
-      x: 1,
-      y: 20,
-      width: 16,
-      height: 12,
-      draw(ctx) {
-        for (let y = 0; y < (palette.length / 16)|0; y++) for (let x = 0; x < 16; x++) {
-          const i = y * 16 + x
-          const color = palette[i]
-          ctx.drawChar(0, x, y, null, color)
-          if (i === App.paint.fg) {
-            const cw = Math.abs(apcaContrast(WHITE, color))
-            const cb = Math.abs(apcaContrast(BLACK, color))
-            const wb = cb > cw ? BLACK : WHITE
-            ctx.drawChar('f'.charCodeAt(0), x, y, wb)
-          } else if (i === App.paint.bg) {
-            const cw = Math.abs(apcaContrast(WHITE, color))
-            const cb = Math.abs(apcaContrast(BLACK, color))
-            const wb = cb > cw ? BLACK : WHITE
-            ctx.drawChar('b'.charCodeAt(0), x, y, wb)
+      name: 'sidebar/paint',
+      display() { return App.sidebar === 'paint' },
+      children: [
+        // -- Font --
+        {
+          x: 0, y: 1,
+          draw(ctx) {
+            [...'Font'].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+            })
+            const borderFg = App.skin.borders
+            const borderBg = App.skin.background
+            const height = 16
+            const width = 16
+            ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+            for (let i = 0; i < height; i++) {
+              ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+              ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+            }
+            ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+            for (let i = 0; i < width - 4; i++)
+              ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU_D, width - 3, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, width, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 1 + 'Font'.length + 1, 0, borderFg, borderBg)
+            for (let i = 1 + 'Font'.length + 1 + 1; i < width + 1; i++)
+              ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+          },
+          keydown(code) {
+            if (code === 'ArrowUp') {
+              const y = (App.paint.char / 16)|0
+              const x = App.paint.char % 16
+              App.paint.char = ((y + 15) % 16) * 16 + x
+            }
+            if (code === 'ArrowDown') {
+              const y = (App.paint.char / 16)|0
+              const x = App.paint.char % 16
+              App.paint.char = ((y + 1) % 16) * 16 + x
+            }
+            if (code === 'ArrowLeft') {
+              const y = (App.paint.char / 16)|0
+              const x = App.paint.char % 16
+              App.paint.char = y * 16 + (x + 15) % 16
+            }
+            if (code === 'ArrowRight') {
+              const y = (App.paint.char / 16)|0
+              const x = App.paint.char % 16
+              App.paint.char = y * 16 + (x + 1) % 16
+            }
+          },
+        },
+        {
+          x: 1, y: 2,
+          width: 16, height: 16,
+          draw(ctx) {
+            const selectedX = App.paint.char % 16
+            const selectedY = (App.paint.char / 16)|0
+            for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+              const color =
+                (x === selectedX && y === selectedY) || (this.tmouse?.x === x && this.tmouse?.y === y)
+                ? App.skin.glyphs.selected
+                : x === selectedX || y === selectedY
+                ? App.skin.glyphs.aligned
+                : App.skin.glyphs.other
+              ctx.drawChar(y*16+x, x, y, color, App.skin.background)
+            }
+          },
+          mousedown(x, y, button) {
+            if (button === 0) {
+              App.paint.char = y * 16 + x
+            }
           }
-        }
-      },
-      mousedown(x, y, button) {
-        this.mouseWentDownInPalette = true
-        if (button === 0) {
-          App.paint.fg = y * 16 + x
-        } else if (button === 2) {
-          App.paint.bg = y * 16 + x
-        }
-      },
-      mousemove(x, y, buttons) {
-        if (!this.mouseWentDownInPalette) return
-        if (buttons & 1) {
-          App.paint.fg = y * 16 + x
-        }
-        if (buttons & 2) {
-          App.paint.bg = y * 16 + x
-        }
-      },
-      mouseup() {
-        this.mouseWentDownInPalette = false
-      }
+        },
+        button({
+          x: 14,
+          y: 18,
+          width: 1,
+          title() { return '<' },
+          click() {
+            const newIdx = (App.fontIdx + fontConfig.length - 1) % fontConfig.length
+            App.fontIdx = newIdx
+            const newFont = fontConfig[newIdx]
+            App.setFont(newFont).then(App.requestRedraw)
+          },
+        }),
+        button({
+          x: 15,
+          y: 18,
+          width: 1,
+          title() { return '>' },
+          click() {
+            const newIdx = (App.fontIdx + 1) % fontConfig.length
+            App.fontIdx = newIdx
+            const newFont = fontConfig[newIdx]
+            App.setFont(newFont).then(App.requestRedraw)
+          },
+        }),
+
+        // -- Palette --
+        {
+          x: 0,
+          y: 19,
+          draw(ctx) {
+            [...'Palette'].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+            })
+            const borderFg = App.skin.borders
+            const borderBg = App.skin.background
+            const height = 12
+            const width = 16
+            ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+            for (let i = 0; i < height; i++) {
+              ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+              ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+            }
+            ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+            for (let i = 0; i < width; i++)
+              ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 1 + 'Palette'.length + 1, 0, borderFg, borderBg)
+            for (let i = 1 + 'Palette'.length + 1 + 1; i < width + 1; i++)
+              ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+          }
+        },
+        {
+          x: 1,
+          y: 20,
+          width: 16,
+          height: 12,
+          draw(ctx) {
+            for (let y = 0; y < (palette.length / 16)|0; y++) for (let x = 0; x < 16; x++) {
+              const i = y * 16 + x
+              const color = palette[i]
+              ctx.drawChar(0, x, y, null, color)
+              if (i === App.paint.fg) {
+                const cw = Math.abs(apcaContrast(WHITE, color))
+                const cb = Math.abs(apcaContrast(BLACK, color))
+                const wb = cb > cw ? BLACK : WHITE
+                ctx.drawChar('f'.charCodeAt(0), x, y, wb)
+              } else if (i === App.paint.bg) {
+                const cw = Math.abs(apcaContrast(WHITE, color))
+                const cb = Math.abs(apcaContrast(BLACK, color))
+                const wb = cb > cw ? BLACK : WHITE
+                ctx.drawChar('b'.charCodeAt(0), x, y, wb)
+              }
+            }
+          },
+          mousedown(x, y, button) {
+            this.mouseWentDownInPalette = true
+            if (button === 0) {
+              App.paint.fg = y * 16 + x
+            } else if (button === 2) {
+              App.paint.bg = y * 16 + x
+            }
+          },
+          mousemove(x, y, buttons) {
+            if (!this.mouseWentDownInPalette) return
+            if (buttons & 1) {
+              App.paint.fg = y * 16 + x
+            }
+            if (buttons & 2) {
+              App.paint.bg = y * 16 + x
+            }
+          },
+          mouseup() {
+            this.mouseWentDownInPalette = false
+          }
+        },
+
+        // -- Tools --
+        {
+          x: 0,
+          y: 33,
+          draw(ctx) {
+            const title = 'Tools';
+            [...title].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+            })
+            const borderFg = App.skin.borders
+            const borderBg = App.skin.background
+            const height = 6
+            const width = 7
+            ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+            for (let i = 0; i < height; i++) {
+              ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+              ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+            }
+            ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+            for (let i = 0; i < width; i++)
+              ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+            for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+              ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+            for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+              ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+          },
+        },
+        button({
+          x: 1,
+          y: 34,
+          width: 7,
+          title() { return ' Undo  ' },
+          click() { App.undo() },
+          keydown(code, mods) {
+            if (mods && code === 'KeyZ') App.undo()
+          },
+        }),
+        button({
+          x: 1,
+          y: 35,
+          width: 7,
+          title() { return ' Redo  ' },
+          click() { App.redo() },
+          keydown(code, mods) {
+            if (mods && code === 'KeyY') App.redo()
+          },
+        }),
+
+        // -- Image --
+        {
+          x: 0,
+          y: 41,
+          draw(ctx) {
+            const title = 'Image';
+            [...title].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+            })
+            const borderFg = App.skin.borders
+            const borderBg = App.skin.background
+            const height = 6
+            const width = 7
+            ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+            for (let i = 0; i < height; i++) {
+              ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+              ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+            }
+            ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+            for (let i = 0; i < width; i++)
+              ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+            for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+              ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+            for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+              ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+          },
+        },
+        button({
+          x: 1,
+          y: 42,
+          width: 7,
+          title() { return ' New   ' },
+          click() {
+            App.files.push({
+              name: 'unnamed',
+              data: new Map,
+              undoStack: [],
+              redoStack: [],
+            })
+            App.selectedFile = App.files.length - 1
+          },
+        }),
+        button({
+          x: 1,
+          y: 43,
+          width: 7,
+          title() { return ' Save  ' },
+          click() { },
+        }),
+        button({
+          x: 1,
+          y: 44,
+          width: 7,
+          title() { return ' Export' },
+          click() { },
+        }),
+
+        // -- Apply --
+        {
+          x: 9,
+          y: 33,
+          draw(ctx) {
+            [...'Apply'].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+            })
+            const borderFg = App.skin.borders
+            const borderBg = App.skin.background
+            const height = 4
+            const width = 7
+            ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+            for (let i = 0; i < height; i++) {
+              ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+              ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+            }
+            ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+            for (let i = 0; i < width; i++)
+              ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 1 + 'Apply'.length + 1, 0, borderFg, borderBg)
+            for (let i = 1 + 'Apply'.length + 1 + 1; i < width + 1; i++)
+              ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+            for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+              ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+          },
+        },
+        {
+          x: 10,
+          y: 34,
+          width: 7,
+          height: 1,
+          draw(ctx) {
+            const fg = App.apply.glyph ? App.skin.buttons.active : App.skin.buttons.inactive;
+            const bg = this.tmouse ? App.skin.buttons.highlight : null;
+            [...' Glyph '].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
+            })
+            ctx.drawChar(App.paint.char, 6, 0, WHITE)
+          },
+          mousedown(_x, _y, button) {
+            if (button === 0) {
+              App.apply.glyph = !App.apply.glyph
+            }
+          },
+          keydown(code) {
+            if (code === 'KeyG') App.apply.glyph = !App.apply.glyph
+          },
+        },
+        {
+          x: 10,
+          y: 35,
+          width: 7,
+          height: 1,
+          draw(ctx) {
+            const fg = App.apply.fg ? App.skin.buttons.active : App.skin.buttons.inactive;
+            const bg = this.tmouse ? App.skin.buttons.highlight : null;
+            [...' Fore  '].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
+            })
+            ctx.drawChar(0, 6, 0, null, palette[App.paint.fg])
+          },
+          mousedown(_x, _y, button) {
+            if (button === 0) {
+              App.apply.fg = !App.apply.fg
+            }
+          },
+          keydown(code) {
+            if (code === 'KeyF') App.apply.fg = !App.apply.fg
+          },
+        },
+        {
+          x: 10,
+          y: 36,
+          width: 7,
+          height: 1,
+          draw(ctx) {
+            const fg = App.apply.bg ? App.skin.buttons.active : App.skin.buttons.inactive;
+            const bg = this.tmouse ? App.skin.buttons.highlight : null;
+            [...' Back  '].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
+            })
+            ctx.drawChar(0, 6, 0, null, palette[App.paint.bg])
+          },
+          mousedown(_x, _y, button) {
+            if (button === 0) {
+              App.apply.bg = !App.apply.bg
+            }
+          },
+          keydown(code) {
+            if (code === 'KeyB') App.apply.bg = !App.apply.bg
+          },
+        },
+
+        // -- Draw --
+        {
+          x: 9,
+          y: 39,
+          draw(ctx) {
+            const title = 'Draw';
+            [...title].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+            })
+            const borderFg = App.skin.borders
+            const borderBg = App.skin.background
+            const height = 8
+            const width = 7
+            ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+            for (let i = 0; i < height; i++) {
+              ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+              ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+            }
+            ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+            for (let i = 0; i < width; i++)
+              ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+            for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+              ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+            for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+              ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+          },
+        },
+        button({
+          x: 10,
+          y: 40,
+          width: 7,
+          title: () => ` Cell ${App.toolOptions.joinCells ? '\u00c5' : '\u00c4'}`,
+          active: () => App.tool === 'cell',
+          click: () => App.selectTool('cell'),
+          keydown: (code) => code === 'KeyC' && App.selectTool('cell'),
+        }),
+        button({
+          x: 10,
+          y: 41,
+          width: 7,
+          title: () => ' Line  ',
+          active: () => App.tool === 'line',
+          click: () => App.selectTool('line'),
+          keydown: (code) => code === 'KeyL' && App.selectTool('line'),
+        }),
+        button({
+          x: 10,
+          y: 42,
+          width: 7,
+          title: () => ` Rect ${App.toolOptions.fillRect ? '\u00fe' : '\u00ff'}`,
+          active: () => App.tool === 'rect',
+          click: () => App.selectTool('rect'),
+          keydown: (code) => code === 'KeyR' && App.selectTool('rect'),
+        }),
+        button({
+          x: 10,
+          y: 43,
+          width: 7,
+          title: () => ` Oval ${App.toolOptions.fillOval ? '\u00fe' : '\u00ff'}`,
+          active: () => App.tool === 'oval',
+          click: () => App.selectTool('oval'),
+          keydown: (code) => code === 'KeyO' && App.selectTool('oval'),
+        }),
+        button({
+          x: 10,
+          y: 44,
+          width: 7,
+          title: () => ' Fill  ',
+          active: () => App.tool === 'fill',
+          click: () => App.selectTool('fill'),
+          keydown: (code) => code === 'KeyI' && App.selectTool('fill'),
+        }),
+        button({
+          x: 10,
+          y: 45,
+          width: 7,
+          title: () => ' Text  ',
+          active: () => App.tool === 'text',
+          click: () => App.selectTool('text'),
+          keydown: (code) => code === 'KeyT' && App.selectTool('text'),
+        }),
+        button({
+          x: 10,
+          y: 46,
+          width: 7,
+          title: () => ` Copy ${App.toolOptions.copyMode === 'copy' ? 'c' : 'x'}`,
+          active: () => App.tool === 'copy',
+          click: () => App.selectTool('copy'),
+          keydown: (code, mods) => {
+            if (mods && code === 'KeyC') {
+              App.tool = 'copy'
+              App.toolOptions.copyMode = 'copy'
+            }
+            if (mods && code === 'KeyX') {
+              App.tool = 'copy'
+              App.toolOptions.copyMode = 'cut'
+            }
+          },
+        }),
+        button({
+          x: 10,
+          y: 47,
+          width: 7,
+          title: () => ' Paste ',
+          active: () => App.tool === 'paste',
+          click: () => App.selectTool('paste'),
+          keydown: (code, mods) => mods && code === 'KeyV' && App.selectTool('paste'),
+        }),
+
+        // -- Info --
+        {
+          x: 0,
+          y: 49, // TODO: move down
+          draw(ctx) {
+            const title = 'Info';
+            [...title].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+            })
+            const borderFg = App.skin.borders
+            const borderBg = App.skin.background
+            const height = 3
+            const width = 16
+            ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+            for (let i = 0; i < height; i++) {
+              ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+              ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+            }
+            ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+            for (let i = 0; i < width; i++)
+              ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+            for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+              ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+            for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+              ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+
+            ;[...`${App.paint.char.toString(16).padStart(2, '0')}`].forEach((c, i) => {
+              ctx.drawChar(c.charCodeAt(0), 1 + i, 1, WHITE)
+            })
+          },
+        },
+      ],
     },
 
-    // -- Tools --
     {
-      x: 0,
-      y: 33,
-      draw(ctx) {
-        const title = 'Tools';
-        [...title].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
-        })
-        const borderFg = App.skin.borders
-        const borderBg = App.skin.background
-        const height = 6
-        const width = 7
-        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
-        for (let i = 0; i < height; i++) {
-          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
-          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
-        }
-        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
-        for (let i = 0; i < width; i++)
-          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
-        for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
-          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
-        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
-          ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
-      },
+      name: 'sidebar/browse',
+      display() { return App.sidebar === 'browse' },
+      children: [
+        {
+          x: 0,
+          y: 1,
+          draw(ctx) {
+            const title = 'Images';
+            ctx.drawText(title, 2, 0, WHITE)
+            const borderFg = App.skin.borders
+            const borderBg = App.skin.background
+            const height = ctx.height - 3
+            const width = 16
+            ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
+            for (let i = 0; i < height; i++) {
+              ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
+              ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
+            }
+            ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
+            for (let i = 0; i < width; i++)
+              ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+            for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
+              ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+            for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+              ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+          },
+        },
+        {
+          x: 1,
+          y: 2,
+          width: 16,
+          height: Infinity,
+          draw(ctx) {
+            App.files.forEach((f, i) => {
+              const fg = i === App.selectedFile ? App.skin.buttons.active : App.skin.buttons.inactive
+              if (i === this.tmouse?.y) {
+                ctx.drawText(' '.repeat(16), 0, i, null, App.skin.buttons.highlight)
+              }
+              ctx.drawText(f.name, 1, i, fg, null)
+            })
+          },
+          mousedown(_x, y, button) {
+            if (button === 0) {
+              if (y < App.files.length)
+                App.selectedFile = y
+            } else if (button === 2) {
+              if (y === App.selectedFile)
+                App.ui.push(renameDialog(App.files[App.selectedFile]))
+            }
+          },
+          keydown(code) {
+            if (code === 'ArrowDown') {
+              App.selectedFile = (App.selectedFile + 1) % App.files.length
+            } else if (code === 'ArrowUp') {
+              App.selectedFile = (App.selectedFile + App.files.length - 1) % App.files.length
+            }
+          },
+        },
+      ],
     },
-    button({
-      x: 1,
-      y: 34,
-      width: 7,
-      title() { return ' Undo  ' },
-      click() { App.undo() },
-      keydown(code, mods) {
-        if (mods && code === 'KeyZ') App.undo()
-      },
-    }),
-    button({
-      x: 1,
-      y: 35,
-      width: 7,
-      title() { return ' Redo  ' },
-      click() { App.redo() },
-      keydown(code, mods) {
-        if (mods && code === 'KeyY') App.redo()
-      },
-    }),
-
-    // -- Image --
-    {
-      x: 0,
-      y: 41,
-      draw(ctx) {
-        const title = 'Image';
-        [...title].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
-        })
-        const borderFg = App.skin.borders
-        const borderBg = App.skin.background
-        const height = 6
-        const width = 7
-        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
-        for (let i = 0; i < height; i++) {
-          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
-          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
-        }
-        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
-        for (let i = 0; i < width; i++)
-          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
-        for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
-          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
-        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
-          ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
-      },
-    },
-    button({
-      x: 1,
-      y: 42,
-      width: 7,
-      title() { return ' New   ' },
-      click() { },
-    }),
-    button({
-      x: 1,
-      y: 43,
-      width: 7,
-      title() { return ' Save  ' },
-      click() { },
-    }),
-    button({
-      x: 1,
-      y: 44,
-      width: 7,
-      title() { return ' Export' },
-      click() { },
-    }),
-
-    // -- Apply --
-    {
-      x: 9,
-      y: 33,
-      draw(ctx) {
-        [...'Apply'].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
-        })
-        const borderFg = App.skin.borders
-        const borderBg = App.skin.background
-        const height = 4
-        const width = 7
-        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
-        for (let i = 0; i < height; i++) {
-          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
-          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
-        }
-        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
-        for (let i = 0; i < width; i++)
-          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing._URD, 1 + 'Apply'.length + 1, 0, borderFg, borderBg)
-        for (let i = 1 + 'Apply'.length + 1 + 1; i < width + 1; i++)
-          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
-        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
-          ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
-      },
-    },
-    {
-      x: 10,
-      y: 34,
-      width: 7,
-      height: 1,
-      draw(ctx) {
-        const fg = App.apply.glyph ? App.skin.buttons.active : App.skin.buttons.inactive;
-        const bg = this.tmouse ? App.skin.buttons.highlight : null;
-        [...' Glyph '].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
-        })
-        ctx.drawChar(App.paint.char, 6, 0, WHITE)
-      },
-      mousedown(_x, _y, button) {
-        if (button === 0) {
-          App.apply.glyph = !App.apply.glyph
-        }
-      },
-    },
-    {
-      x: 10,
-      y: 35,
-      width: 7,
-      height: 1,
-      draw(ctx) {
-        const fg = App.apply.fg ? App.skin.buttons.active : App.skin.buttons.inactive;
-        const bg = this.tmouse ? App.skin.buttons.highlight : null;
-        [...' Fore  '].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
-        })
-        ctx.drawChar(0, 6, 0, null, palette[App.paint.fg])
-      },
-      mousedown(_x, _y, button) {
-        if (button === 0) {
-          App.apply.fg = !App.apply.fg
-        }
-      },
-    },
-    {
-      x: 10,
-      y: 36,
-      width: 7,
-      height: 1,
-      draw(ctx) {
-        const fg = App.apply.bg ? App.skin.buttons.active : App.skin.buttons.inactive;
-        const bg = this.tmouse ? App.skin.buttons.highlight : null;
-        [...' Back  '].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
-        })
-        ctx.drawChar(0, 6, 0, null, palette[App.paint.bg])
-      },
-      mousedown(_x, _y, button) {
-        if (button === 0) {
-          App.apply.bg = !App.apply.bg
-        }
-      },
-    },
-
-    // -- Draw --
-    {
-      x: 9,
-      y: 39,
-      draw(ctx) {
-        const title = 'Draw';
-        [...title].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
-        })
-        const borderFg = App.skin.borders
-        const borderBg = App.skin.background
-        const height = 8
-        const width = 7
-        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
-        for (let i = 0; i < height; i++) {
-          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
-          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
-        }
-        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
-        for (let i = 0; i < width; i++)
-          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
-        for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
-          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
-        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
-          ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
-      },
-    },
-    button({
-      x: 10,
-      y: 40,
-      width: 7,
-      title: () => ` Cell ${App.toolOptions.joinCells ? '\u00c5' : '\u00c4'}`,
-      active: () => App.tool === 'cell',
-      click: () => App.selectTool('cell'),
-      keydown: (code) => code === 'KeyC' && App.selectTool('cell'),
-    }),
-    button({
-      x: 10,
-      y: 41,
-      width: 7,
-      title: () => ' Line  ',
-      active: () => App.tool === 'line',
-      click: () => App.selectTool('line'),
-      keydown: (code) => code === 'KeyL' && App.selectTool('line'),
-    }),
-    button({
-      x: 10,
-      y: 42,
-      width: 7,
-      title: () => ` Rect ${App.toolOptions.fillRect ? '\u00fe' : '\u00ff'}`,
-      active: () => App.tool === 'rect',
-      click: () => App.selectTool('rect'),
-      keydown: (code) => code === 'KeyR' && App.selectTool('rect'),
-    }),
-    button({
-      x: 10,
-      y: 43,
-      width: 7,
-      title: () => ` Oval ${App.toolOptions.fillOval ? '\u00fe' : '\u00ff'}`,
-      active: () => App.tool === 'oval',
-      click: () => App.selectTool('oval'),
-      keydown: (code) => code === 'KeyO' && App.selectTool('oval'),
-    }),
-    button({
-      x: 10,
-      y: 44,
-      width: 7,
-      title: () => ' Fill  ',
-      active: () => App.tool === 'fill',
-      click: () => App.selectTool('fill'),
-      keydown: (code) => code === 'KeyI' && App.selectTool('fill'),
-    }),
-    button({
-      x: 10,
-      y: 45,
-      width: 7,
-      title: () => ' Text  ',
-      active: () => App.tool === 'text',
-      click: () => App.selectTool('text'),
-      keydown: (code) => code === 'KeyT' && App.selectTool('text'),
-    }),
-    button({
-      x: 10,
-      y: 46,
-      width: 7,
-      title: () => ` Copy ${App.toolOptions.copyMode === 'copy' ? 'c' : 'x'}`,
-      active: () => App.tool === 'copy',
-      click: () => App.selectTool('copy'),
-      keydown: (code, mods) => {
-        if (mods && code === 'KeyC') {
-          App.tool = 'copy'
-          App.toolOptions.copyMode = 'copy'
-        }
-        if (mods && code === 'KeyX') {
-          App.tool = 'copy'
-          App.toolOptions.copyMode = 'cut'
-        }
-      },
-    }),
-    button({
-      x: 10,
-      y: 47,
-      width: 7,
-      title: () => ' Paste ',
-      active: () => App.tool === 'paste',
-      click: () => App.selectTool('paste'),
-      keydown: (code, mods) => mods && code === 'KeyV' && App.selectTool('paste'),
-    }),
-
-    // -- Info --
-    {
-      x: 0,
-      y: 49, // TODO: move down
-      draw(ctx) {
-        const title = 'Info';
-        [...title].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
-        })
-        const borderFg = App.skin.borders
-        const borderBg = App.skin.background
-        const height = 3
-        const width = 16
-        ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
-        for (let i = 0; i < height; i++) {
-          ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
-          ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
-        }
-        ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
-        for (let i = 0; i < width; i++)
-          ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
-        ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
-        for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
-          ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
-        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
-          ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
-
-        ;[...`${App.paint.char.toString(16).padStart(2, '0')}`].forEach((c, i) => {
-          ctx.drawChar(c.charCodeAt(0), 1 + i, 1, WHITE)
-        })
-      },
-    },
-
 
     // -- Canvas --
     {
@@ -920,7 +1136,7 @@ const App = {
     }
   },
   init() {
-    for (const el of this.ui)
+    for (const el of this.eachUiIncludingInvisible())
       Object.setPrototypeOf(el, {
         get tmouse() {
           const atm = App.tmouse
@@ -930,20 +1146,52 @@ const App = {
         },
       })
   },
-  draw(drawChar) {
-    this.ui.forEach((el) => {
+
+  *eachUiIncludingInvisible() {
+    yield* iterate(this.ui)
+    function* iterate(els) {
+      for (const el of els) {
+        yield el
+        if (el.children) {
+          yield* iterate(el.children)
+        }
+      }
+    }
+  },
+
+  *eachUi() {
+    yield* iterate(this.ui)
+    function* iterate(els) {
+      for (const el of els) {
+        const display = el.display ?? true
+        if (display && (typeof display !== 'function' || display())) {
+          yield el
+          yield* iterate(el.children ?? [])
+        }
+      }
+    }
+  },
+
+  draw({width, height, drawChar}) {
+    for (const el of this.eachUi()) {
       if (el.draw) {
         el.draw({
+          width, height,
           drawChar(c, x, y, fg, bg) {
             drawChar(App.font.image, c, x + el.x, y + el.y, fg, bg)
-          }
+          },
+          drawText(str, x, y, fg, bg) {
+            for (let i = 0; i < str.length; i++) {
+              this.drawChar(str.charCodeAt(i), x+i, y, fg, bg)
+            }
+          },
         })
       }
-    });
+    }
   },
   mousemove() {
     const { x, y } = this.tmouse
-    for (const el of this.ui) {
+    for (const el of this.eachUi()) {
       if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
         if (el.mousemove)
           el.mousemove(x - el.x, y - el.y, this.mouseButtons)
@@ -951,7 +1199,7 @@ const App = {
   },
   mousedown(button) {
     const { x, y } = this.tmouse
-    for (const el of this.ui)
+    for (const el of this.eachUi())
       if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
         if (el.mousedown)
           el.mousedown(x - el.x, y - el.y, button)
@@ -959,56 +1207,37 @@ const App = {
   mouseup(button) {
     if (this.tmouse) {
       const { x, y } = this.tmouse
-      for (const el of this.ui)
+      for (const el of this.eachUi())
         if (el.mouseup)
           el.mouseup(x - el.x, y - el.y, button)
     }
   },
   keydown(code, mods) {
-    for (const el of this.ui)
+    for (const el of this.eachUi())
       if (el.captureKeys) {
         if (el.keydown) el.keydown(code, mods)
         return
       }
-    for (const el of this.ui)
+    for (const el of this.eachUi())
       if (el.keydown)
         el.keydown(code, mods)
-    if (code === 'KeyG') App.apply.glyph = !App.apply.glyph
-    if (code === 'KeyF') App.apply.fg = !App.apply.fg
-    if (code === 'KeyB') App.apply.bg = !App.apply.bg
-    if (code === 'ArrowUp') {
-      const y = (App.paint.char / 16)|0
-      const x = App.paint.char % 16
-      App.paint.char = ((y + 15) % 16) * 16 + x
-    }
-    if (code === 'ArrowDown') {
-      const y = (App.paint.char / 16)|0
-      const x = App.paint.char % 16
-      App.paint.char = ((y + 1) % 16) * 16 + x
-    }
-    if (code === 'ArrowLeft') {
-      const y = (App.paint.char / 16)|0
-      const x = App.paint.char % 16
-      App.paint.char = y * 16 + (x + 15) % 16
-    }
-    if (code === 'ArrowRight') {
-      const y = (App.paint.char / 16)|0
-      const x = App.paint.char % 16
-      App.paint.char = y * 16 + (x + 1) % 16
+    if (code === 'Tab') {
+      App.sidebar = App.sidebar === 'paint' ? 'browse' : 'paint'
+      event.preventDefault()
     }
   },
   keypress(key) {
-    for (const el of this.ui)
+    for (const el of this.eachUi())
       if (el.captureKeys) {
         if (el.keypress) el.keypress(key)
         return
       }
-    for (const el of this.ui)
+    for (const el of this.eachUi())
       if (el.keypress)
         el.keypress(key)
   },
   blur() {
-    for (const el of this.ui)
+    for (const el of this.eachUi())
       if (el.blur)
         el.blur()
   }
@@ -1018,8 +1247,10 @@ window.App = App
 async function start() {
   App.init()
   const art = await idb.getItem('art')
-  if (art)
-    App.map = art
+  if (art) {
+    App.files = art.files
+    App.selectedFile = art.selectedFile
+  }
   App.fontIdx = 0
   await App.setFont(fontConfig[0])
   const canvas = document.createElement('canvas')
@@ -1119,8 +1350,12 @@ async function start() {
 
     console.time('draw')
     spriteBatch.begin()
-    App.draw((img, c, tx, ty, fg, bg) => {
-      drawChar(img, c, tx * App.font.tileWidth, ty * App.font.tileHeight, fg, bg)
+    App.draw({
+      width: (canvas.width / App.font.tileWidth) | 0,
+      height: (canvas.height / App.font.tileHeight) | 0,
+      drawChar(img, c, tx, ty, fg, bg) {
+        drawChar(img, c, tx * App.font.tileWidth, ty * App.font.tileHeight, fg, bg)
+      }
     })
     spriteBatch.end()
     console.timeEnd('draw')

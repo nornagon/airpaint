@@ -41,6 +41,14 @@ export const getItem = async (key) => {
     });
 };
 
-
-
-
+export const getAllItems = async (prefix = '') => {
+    const db = await getSimpleDb("lsish");
+    const tx = db.transaction(["data"], "readonly");
+    const os = tx.objectStore("data");
+    const query = IDBKeyRange.bound(prefix, prefix + '\uffff', false, false);
+    const req = os.getAll(query);
+    return new Promise((resolve, reject) => {
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = reject;
+    });
+};
