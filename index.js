@@ -1253,11 +1253,13 @@ const App = {
                 const hx = Math.max(this.toolStart.x, x)
                 const ly = Math.min(this.toolStart.y, y)
                 const hy = Math.max(this.toolStart.y, y)
+                if (App.toolOptions.copyMode === 'cut') App.beginChange()
                 for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
                   const a = App.map.get(`${x},${y}`)
                   if (a) pasteboard.set(`${x-lx},${y-ly}`, a)
                   if (App.toolOptions.copyMode === 'cut') App.map.delete(`${x},${y}`)
                 }
+                if (App.toolOptions.copyMode === 'cut') App.finishChange()
                 App.pasteboard = pasteboard
               }
             }
