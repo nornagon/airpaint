@@ -77,6 +77,9 @@ function button({title, active, click, ...rest}) {
     mousedown(_x, _y, button) {
       if (button === 0) click()
     },
+    click,
+    active,
+    title,
     ...rest
   })
 }
@@ -485,6 +488,10 @@ const App = {
             const newFont = fontConfig[newIdx]
             App.setFont(newFont).then(App.requestRedraw)
           },
+          keydown(code, mods) {
+            if (code === 'Comma' || (mods && code === 'PageUp' /* NB. only works in pwa */))
+              this.click()
+          }
         }),
         button({
           x: 15,
@@ -497,6 +504,10 @@ const App = {
             const newFont = fontConfig[newIdx]
             App.setFont(newFont).then(App.requestRedraw)
           },
+          keydown(code, mods) {
+            if (code === 'Period' || (mods && code === 'PageDown' /* NB. only works in pwa */))
+              this.click()
+          }
         }),
 
         // -- Palette --
