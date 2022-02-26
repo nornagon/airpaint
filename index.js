@@ -36,6 +36,7 @@ function parseFontConfig(text) {
 const WHITE = {r: 1, g: 1, b: 1}
 const BLACK = {r: 0, g: 0, b: 0}
 const palette = parseREXPalette(await fetch('Palette.txt').then(x => x.text()))
+window.palette = palette
 
 function parseREXPalette(txt) {
   const colors = []
@@ -344,6 +345,7 @@ const App = {
   },
   skin: {
     borders: {r: 0, g: 0, b: 0},
+    headers: {r: 222/255, g: 222/255, b: 222/255},
     background: {r: 13/255, g: 24/255, b: 33/255},
     glyphs: {
       selected: {r: 246/255,g: 234/255,b: 189/255},
@@ -356,6 +358,7 @@ const App = {
       inactive: {r: 84/255,g: 79/255,b: 61/255},
       highlight: {r: 24/255,g: 38/255,b: 54/255},
     },
+    info: {r: 222/255, g: 222/255, b: 222/255},
   },
   ui: [
     // -- [PAINT|BROWSE] --
@@ -364,7 +367,7 @@ const App = {
       y: 0,
       draw(ctx) {
         [...'    [     |      ]'].forEach((x, i)  => {
-          ctx.drawChar(x.charCodeAt(0), i, 0, WHITE, App.skin.background)
+          ctx.drawChar(x.charCodeAt(0), i, 0, App.skin.headers, App.skin.background)
         })
       },
     },
@@ -393,29 +396,22 @@ const App = {
         {
           x: 0, y: 1,
           draw(ctx) {
-            [...'Font'].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
-            })
-            const borderFg = App.skin.borders
-            const borderBg = App.skin.background
+            const title = 'Font'
             const height = 16
             const width = 16
-            ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
-            for (let i = 0; i < height; i++) {
-              ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
-              ctx.drawChar(BoxDrawing._U_D, width + 1, 1+i, borderFg, borderBg)
-            }
-            ctx.drawChar(BoxDrawing._UR_, 0, height + 1, borderFg, borderBg)
-            for (let i = 0; i < width - 4; i++)
-              ctx.drawChar(BoxDrawing.L_R_, 1+i, height + 1, borderFg, borderBg)
+            const borderFg = App.skin.borders
+            const borderBg = App.skin.background
+            ctx.drawBorder(0, 0, width + 2, height + 2)
+            ctx.drawText(title, 2, 0, App.skin.headers, App.skin.background)
+            ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
+
             ctx.drawChar(BoxDrawing.LU_D, width - 3, height + 1, borderFg, borderBg)
             ctx.drawChar(BoxDrawing._URD, width, height + 1, borderFg, borderBg)
-            ctx.drawChar(BoxDrawing.LU__, width + 1, height + 1, borderFg, borderBg)
-            ctx.drawChar(BoxDrawing.L__D, width + 1, 0, borderFg, borderBg)
-            ctx.drawChar(BoxDrawing.LU_D, 1, 0, borderFg, borderBg)
-            ctx.drawChar(BoxDrawing._URD, 1 + 'Font'.length + 1, 0, borderFg, borderBg)
-            for (let i = 1 + 'Font'.length + 1 + 1; i < width + 1; i++)
-              ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
+
+            ctx.drawChar(BoxDrawing.LU_D, 1, height + 1, borderFg, borderBg)
+            ctx.drawText(App.paint.char.toString(16).padStart(2, '0'), 2, height + 1, App.skin.glyphs.aligned, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 4, height + 1, borderFg, borderBg)
           },
           keydown(code) {
             if (code === 'ArrowUp') {
@@ -493,7 +489,7 @@ const App = {
           y: 19,
           draw(ctx) {
             [...'Palette'].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, App.skin.headers, App.skin.background)
             })
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
@@ -567,7 +563,7 @@ const App = {
           draw(ctx) {
             const title = 'Tools';
             [...title].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, App.skin.headers, App.skin.background)
             })
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
@@ -618,7 +614,7 @@ const App = {
           y: 41,
           draw(ctx) {
             const title = 'Image';
-            ctx.drawText(title, 2, 0, WHITE)
+            ctx.drawText(title, 2, 0, App.skin.headers, App.skin.background)
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
             const height = 6
@@ -659,7 +655,7 @@ const App = {
         }),
         button({
           x: 1,
-          y: 44,
+          y: 43,
           width: 7,
           title() { return ' Export' },
           async click() {
@@ -725,7 +721,7 @@ const App = {
           y: 33,
           draw(ctx) {
             [...'Apply'].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, App.skin.headers, App.skin.background)
             })
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
@@ -823,7 +819,7 @@ const App = {
           draw(ctx) {
             const title = 'Draw';
             [...title].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, App.skin.headers, App.skin.background)
             })
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
@@ -936,7 +932,7 @@ const App = {
           draw(ctx) {
             const title = 'Info';
             [...title].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, WHITE)
+              ctx.drawChar(c.charCodeAt(0), 2+i, 0, App.skin.headers, App.skin.background)
             })
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
@@ -959,7 +955,7 @@ const App = {
             for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
               ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
 
-            ctx.drawText(`C:${App.paint.char.toString(16).padStart(2, '0')}`, 1, 1, WHITE)
+            ctx.drawText(`C:${App.paint.char.toString(16).padStart(2, '0')}`, 1, 1, App.skin.info)
             //ctx.drawText(`MEM:${(performance.memory.usedJSHeapSize/1024/1024)|0}M`, 1, 3, WHITE)
           },
         },
@@ -975,7 +971,7 @@ const App = {
           y: 1,
           draw(ctx) {
             const title = 'Images';
-            ctx.drawText(title, 2, 0, WHITE)
+            ctx.drawText(title, 2, 0, App.skin.info, App.skin.background)
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
             const height = ctx.height - 3
@@ -1325,6 +1321,20 @@ const App = {
             for (let i = 0; i < str.length; i++) {
               this.drawChar(str.charCodeAt(i), x+i, y, fg, bg)
             }
+          },
+          drawBorder(x, y, width, height, fg = App.skin.borders, bg = App.skin.background) {
+            for (let i = 0; i < height - 1; i++) {
+              this.drawChar(BoxDrawing._U_D, x, y+i, fg, bg)
+              this.drawChar(BoxDrawing._U_D, x + width - 1, y+i, fg, bg)
+            }
+            for (let i = 0; i < width - 1; i++) {
+              this.drawChar(BoxDrawing.L_R_, x + i, y, fg, bg)
+              this.drawChar(BoxDrawing.L_R_, x + i, y + height - 1, fg, bg)
+            }
+            this.drawChar(BoxDrawing.__RD, x, y, fg, bg)
+            this.drawChar(BoxDrawing._UR_, x, y + height - 1, fg, bg)
+            this.drawChar(BoxDrawing.L__D, x + width - 1, y, fg, bg)
+            this.drawChar(BoxDrawing.LU__, x + width - 1, y + height - 1, fg, bg)
           },
         })
       }
