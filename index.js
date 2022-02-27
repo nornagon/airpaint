@@ -123,22 +123,18 @@ function numberButton({value, setValue, width, pattern = /^[0-9]*$/, ...rest}) {
   })
 }
 
-function textToolOverlay({x, y}) {
+function textToolOverlay({x, y, tx, ty}) {
   // TODO: hidden textarea...?
   return {
     x,
     y,
     height: 1,
     text: '',
-    offset() {
-      return App.ui.find(e => e.name === 'canvas').x
-    },
     draw(ctx) {
-      const offset = this.offset()
       const lines = this.text.split('\n')
       lines.forEach((line, y) => {
         for (let i = 0; i < line.length; i++) {
-          const { char = 0x20, fg, bg } = this.applied(this.x + i - offset, this.y + y, line.charCodeAt(i))
+          const { char = 0x20, fg, bg } = this.applied(tx + i, ty + y, line.charCodeAt(i))
           ctx.drawChar(char, i, y, fg, bg)
         }
         if (y === lines.length - 1)
@@ -157,12 +153,11 @@ function textToolOverlay({x, y}) {
           this.text += '\n'
           return
         }
-        const offset = this.offset()
         App.beginChange()
         const lines = this.text.split('\n')
         lines.forEach((line, y) => {
           for (let i = 0; i < line.length; i++) {
-            App.map.set(`${this.x+i - offset},${this.y + y}`, this.applied(this.x + i - offset, this.y + y, line.charCodeAt(i)))
+            App.map.set(`${tx + i},${ty + y}`, this.applied(tx + i, ty + y, line.charCodeAt(i)))
           }
         })
         App.finishChange()
@@ -690,6 +685,11 @@ const App = {
       draw(ctx) {
         ctx.drawText('    [     |      ]', 0, 0, App.skin.headers, App.skin.background)
       },
+      keydown(e) {
+        if (e.code === 'Tab') {
+          App.sidebar = App.sidebar === 'paint' ? 'browse' : 'paint'
+        }
+      }
     },
     button({
       x: 5,
@@ -1240,7 +1240,7 @@ const App = {
           title: () => ` Cell ${App.toolOptions.joinCells ? '\u00c5' : '\u00c4'}`,
           active: () => App.tool === 'cell',
           click: () => App.selectTool('cell'),
-          keydown: ({code}) => code === 'KeyC' && App.selectTool('cell'),
+          keydown: ({code, ctrlKey, metaKey}) => !ctrlKey && !metaKey && code === 'KeyC' && App.selectTool('cell'),
         }),
         button({
           x: 10,
@@ -1443,6 +1443,8 @@ const App = {
       name: 'canvas',
       x: 18,
       y: 0,
+      offsetX: 0,
+      offsetY: 0,
       width: Infinity,
       height: Infinity,
       joinedCellAt(x, y, get) {
@@ -1462,13 +1464,29 @@ const App = {
             : boxDrawingDoubleChar(connectLeft, connectUp, connectRight, connectDown)
         return char
       },
+      get tmouse() {
+        const f = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(this), 'tmouse')
+        const p = f.get.call(this)
+        if (!p) return p
+        const {x, y} = p
+        return {x: x + this.offsetX, y: y + this.offsetY}
+      },
       draw(ctx) {
+        const drawChar = (c, x, y, fg, bg) => {
+          if (x - this.offsetX < 0 || y - this.offsetY < 0) return
+          ctx.drawChar(c, x - this.offsetX, y - this.offsetY, fg, bg)
+        }
         for (const [k, v] of App.map.entries()) {
           const [x, y] = k.split(',')
           const { char, fg, bg } = v
-          ctx.drawChar(char ?? 0x20, +x, +y, fg, bg)
+          drawChar(char ?? 0x20, +x, +y, fg, bg)
         }
         if (this.tmouse) {
+          if (this.panMode) {
+            const char = this.panStart ? '*' : '+'
+            drawChar(char.charCodeAt(0), this.tmouse.x, this.tmouse.y, WHITE, BLACK)
+            return
+          }
           if (App.tool === 'cell') {
             if (App.toolOptions.joinCells) {
               const {x, y} = this.tmouse
@@ -1479,17 +1497,17 @@ const App = {
               const {fg, bg, char: appliedChar} = this.applied(x, y)
               for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
                 const char = App.apply.glyph ? this.joinedCellAt(x+dx, y+dy, get) : appliedChar
-                ctx.drawChar(char, x+dx, y+dy, fg, bg)
+                drawChar(char, x+dx, y+dy, fg, bg)
               }
             } else {
               const { char = 0, fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
-              ctx.drawChar(char, this.tmouse.x, this.tmouse.y, fg, bg)
+              drawChar(char, this.tmouse.x, this.tmouse.y, fg, bg)
             }
           }
           if (App.tool === 'line' && this.toolStart) {
             bresenhamLine(this.toolStart.x, this.toolStart.y, this.tmouse.x, this.tmouse.y, (x, y) => {
               const { char = 0, fg, bg } = this.applied(x, y)
-              ctx.drawChar(char, x, y, fg, bg)
+              drawChar(char, x, y, fg, bg)
             })
           }
           if (App.tool === 'rect' && this.toolStart) {
@@ -1500,13 +1518,13 @@ const App = {
             for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
               const { char = 0, fg, bg } = this.applied(x, y)
               if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
-                ctx.drawChar(char, x, y, fg, bg)
+                drawChar(char, x, y, fg, bg)
             }
           }
           if (App.tool === 'oval' && this.toolStart) {
             (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(this.tmouse.x - this.toolStart.x), Math.abs(this.tmouse.y - this.toolStart.y), (x, y) => {
               const { char = 0, fg, bg } = this.applied(x, y)
-              ctx.drawChar(char, x, y, fg, bg)
+              drawChar(char, x, y, fg, bg)
             })
           }
           if (App.tool === 'copy' && this.toolStart) {
@@ -1515,17 +1533,17 @@ const App = {
             const ly = Math.min(this.toolStart.y, this.tmouse.y)
             const hy = Math.max(this.toolStart.y, this.tmouse.y)
             for (let y = ly; y <= hy; y++) {
-              ctx.drawChar(BoxDrawing._U_D, lx - 1, y, WHITE, BLACK)
-              ctx.drawChar(BoxDrawing._U_D, hx + 1, y, WHITE, BLACK)
+              drawChar(BoxDrawing._U_D, lx - 1, y, WHITE, BLACK)
+              drawChar(BoxDrawing._U_D, hx + 1, y, WHITE, BLACK)
             }
             for (let x = lx; x <= hx; x++) {
-              ctx.drawChar(BoxDrawing.L_R_, x, ly - 1, WHITE, BLACK)
-              ctx.drawChar(BoxDrawing.L_R_, x, hy + 1, WHITE, BLACK)
+              drawChar(BoxDrawing.L_R_, x, ly - 1, WHITE, BLACK)
+              drawChar(BoxDrawing.L_R_, x, hy + 1, WHITE, BLACK)
             }
-            ctx.drawChar(BoxDrawing.__RD, lx - 1, ly - 1, WHITE, BLACK)
-            ctx.drawChar(BoxDrawing.L__D, hx + 1, ly - 1, WHITE, BLACK)
-            ctx.drawChar(BoxDrawing._UR_, lx - 1, hy + 1, WHITE, BLACK)
-            ctx.drawChar(BoxDrawing.LU__, hx + 1, hy + 1, WHITE, BLACK)
+            drawChar(BoxDrawing.__RD, lx - 1, ly - 1, WHITE, BLACK)
+            drawChar(BoxDrawing.L__D, hx + 1, ly - 1, WHITE, BLACK)
+            drawChar(BoxDrawing._UR_, lx - 1, hy + 1, WHITE, BLACK)
+            drawChar(BoxDrawing.LU__, hx + 1, hy + 1, WHITE, BLACK)
           }
           if (App.tool === 'paste' && App.pasteboard) {
             for (const [k, v] of App.pasteboard.entries()) {
@@ -1534,7 +1552,7 @@ const App = {
               if (App.apply.glyph) paint.char = v.char
               if (App.apply.fg) paint.fg = v.fg
               if (App.apply.bg) paint.bg = v.bg
-              ctx.drawChar(paint.char, x + this.tmouse.x, y + this.tmouse.y, paint.fg, paint.bg)
+              drawChar(paint.char, x + this.tmouse.x, y + this.tmouse.y, paint.fg, paint.bg)
             }
           }
         }
@@ -1580,6 +1598,16 @@ const App = {
         App.finishChange()
       },
       mousedown({x, y, button}) {
+        const ox = x
+        const oy = y
+        x = x + this.offsetX
+        y = y + this.offsetY
+        if (this.panMode) {
+          if (button === 0) {
+            this.panStart = {x: ox, y: oy, offsetX: this.offsetX, offsetY: this.offsetY}
+          }
+          return
+        }
         if (button === 0) {
           if (App.tool === 'cell') {
             App.beginChange()
@@ -1588,7 +1616,7 @@ const App = {
           } else if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval' || App.tool === 'copy') {
             this.toolStart = { x, y }
           } else if (App.tool === 'text') {
-            App.ui.push(textToolOverlay({x: this.x + x, y: this.y + y}))
+            App.ui.push(textToolOverlay({x: this.x + ox, y: this.y + oy, tx: x, ty: y}))
           } else if (App.tool === 'paste') {
             this.paste(x, y)
           }
@@ -1614,6 +1642,12 @@ const App = {
         }
       },
       mouseup({x, y, button}) {
+        if (this.panMode) {
+          this.panStart = null
+          return
+        }
+        x = x + this.offsetX
+        y = y + this.offsetY
         if (button === 0) {
           if (App.tool === 'cell') {
             App.finishChange()
@@ -1666,14 +1700,27 @@ const App = {
       },
       keydown({code}) {
         if (code === 'Escape') this.toolStart = null
+        if (code === 'Space') this.panMode = true
+      },
+      keyup({code}) {
+        if (code === 'Space') this.panMode = false
       },
       blur() {
         this.toolStart = null
+        this.panStart = null
+        this.panMode = false
         App.finishChange() // noop if there's no change happening.
       },
       mousemove({x, y, buttons}) {
+        if (this.panStart) {
+          const dx = this.panStart.x - x
+          const dy = this.panStart.y - y
+          this.offsetX = this.panStart.offsetX + dx
+          this.offsetY = this.panStart.offsetY + dy
+          return
+        }
         if (App.tool === 'cell') {
-          if (buttons & 1) this.paint(x, y)
+          if (buttons & 1) this.paint(x + this.offsetX, y + this.offsetY)
         }
       },
     },
@@ -1808,9 +1855,12 @@ const App = {
         el.keydown(e)
       if (e.propagationStopped || el.captureKeys) break
     }
-    if (e.code === 'Tab') {
-      App.sidebar = App.sidebar === 'paint' ? 'browse' : 'paint'
-      event.preventDefault()
+  },
+  keyup(e) {
+    for (const el of this.eachUiReverse()) {
+      if (el.keyup)
+        el.keyup(e)
+      if (e.propagationStopped || el.captureKeys) break
     }
   },
   keypress(e) {
@@ -1996,10 +2046,25 @@ async function start() {
   })
 
   window.addEventListener('keydown', (e) => {
+    if (e.code === 'Tab') e.preventDefault()
     App.keydown({
       code: e.code,
       metaKey: e.metaKey,
       altKey: e.altKey,
+      ctrlKey: e.ctrlKey,
+      shiftKey: e.shiftKey,
+      stopPropagation() {
+        this.propagationStopped = true
+      }
+    })
+    dirty()
+  })
+  window.addEventListener('keyup', (e) => {
+    App.keyup({
+      code: e.code,
+      metaKey: e.metaKey,
+      altKey: e.altKey,
+      ctrlKey: e.ctrlKey,
       shiftKey: e.shiftKey,
       stopPropagation() {
         this.propagationStopped = true
@@ -2014,6 +2079,7 @@ async function start() {
       key: e.key,
       metaKey: e.metaKey,
       altKey: e.altKey,
+      ctrlKey: e.ctrlKey,
       shiftKey: e.shiftKey,
       stopPropagation() {
         this.propagationStopped = true
