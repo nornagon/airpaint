@@ -1455,10 +1455,20 @@ const App = {
       name: 'canvas',
       x: 18,
       y: 0,
-      offsetX: 0,
-      offsetY: 0,
       width: Infinity,
       height: Infinity,
+      get offsetX() {
+        return App.files[App.selectedFile].offsetX ?? 0
+      },
+      set offsetX(x) {
+        App.files[App.selectedFile].offsetX = x
+      },
+      get offsetY() {
+        return App.files[App.selectedFile].offsetY ?? 0
+      },
+      set offsetY(y) {
+        App.files[App.selectedFile].offsetY = y
+      },
       joinedCellAt(x, y, get) {
         function bdt(c) { return isSingleBoxDrawingChar(c) ? 1 : isDoubleBoxDrawingChar(c) ? 2 : 0 }
         const c = get(x, y)
