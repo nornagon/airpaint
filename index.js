@@ -787,10 +787,12 @@ const App = {
           width: 1,
           title() { return '<' },
           click() {
-            const newIdx = (App.fontIdx + fontConfig.length - 1) % fontConfig.length
-            App.fontIdx = newIdx
-            const newFont = fontConfig[newIdx]
-            App.setFont(newFont).then(App.requestRedraw)
+            App.later(() => {
+              const newIdx = (App.fontIdx + fontConfig.length - 1) % fontConfig.length
+              App.fontIdx = newIdx
+              const newFont = fontConfig[newIdx]
+              App.setFont(newFont).then(App.requestRedraw)
+            })
           },
           keydown(e) {
             if (e.code === 'Comma' || ((e.ctrlKey || e.metaKey) && e.code === 'PageUp' /* NB. only works in pwa */))
@@ -803,10 +805,12 @@ const App = {
           width: 1,
           title() { return '>' },
           click() {
-            const newIdx = (App.fontIdx + 1) % fontConfig.length
-            App.fontIdx = newIdx
-            const newFont = fontConfig[newIdx]
-            App.setFont(newFont).then(App.requestRedraw)
+            App.later(() => {
+              const newIdx = (App.fontIdx + 1) % fontConfig.length
+              App.fontIdx = newIdx
+              const newFont = fontConfig[newIdx]
+              App.setFont(newFont).then(App.requestRedraw)
+            })
           },
           keydown(e) {
             if (e.code === 'Period' || ((e.ctrlKey || e.metaKey) && e.code === 'PageDown' /* NB. only works in pwa */))
@@ -1805,6 +1809,14 @@ const App = {
     }
   },
 
+  laters: [],
+  later(fn) {
+    this.laters.push(fn)
+  },
+  doLaters() {
+    this.laters.forEach(f => f())
+    this.laters.length = 0
+  },
   draw({width, height, drawChar}) {
     for (const el of this.eachUi()) {
       if (el.draw) {
@@ -1835,6 +1847,7 @@ const App = {
         })
       }
     }
+    this.doLaters()
   },
   mousemove(e) {
     const { x, y } = this.tmouse
@@ -1847,6 +1860,7 @@ const App = {
         }
       if (e.propagationStopped) break
     }
+    this.doLaters()
   },
   mousedown(e) {
     const { x, y } = this.tmouse
@@ -1860,6 +1874,7 @@ const App = {
         }
       if (e.propagationStopped || keyWasCaptured) break
     }
+    this.doLaters()
   },
   mouseup(e) {
     if (this.tmouse) {
@@ -1875,6 +1890,7 @@ const App = {
         if (e.propagationStopped || keyWasCaptured) break
       }
     }
+    this.doLaters()
   },
   keydown(e) {
     for (const el of this.eachUiReverse()) {
@@ -1883,6 +1899,7 @@ const App = {
         el.keydown(e)
       if (e.propagationStopped || keyWasCaptured) break
     }
+    this.doLaters()
   },
   keyup(e) {
     for (const el of this.eachUiReverse()) {
@@ -1891,6 +1908,7 @@ const App = {
         el.keyup(e)
       if (e.propagationStopped || keyWasCaptured) break
     }
+    this.doLaters()
   },
   keypress(e) {
     for (const el of this.eachUiReverse()) {
@@ -1899,11 +1917,13 @@ const App = {
         el.keypress(e)
       if (e.propagationStopped || keyWasCaptured) break
     }
+    this.doLaters()
   },
   blur() {
     for (const el of this.eachUiReverse())
       if (el.blur)
         el.blur()
+    this.doLaters()
   }
 }
 window.App = App
