@@ -70,16 +70,55 @@ function button({title, active, click, ...rest}) {
     draw(ctx) {
       const fg = active ? active() ? App.skin.buttons.active : App.skin.buttons.inactive : App.skin.buttons.usable;
       const bg = this.tmouse ? App.skin.buttons.highlight : App.skin.background;
-      [...title()].forEach((c, i) => {
-        ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
-      })
+      ctx.drawText(title(), 0, 0, fg, bg)
     },
-    mousedown(_x, _y, button) {
-      if (button === 0) click()
+    mousedown({button}) {
+      if (button === 0) this.click()
     },
     click,
     active,
     title,
+    ...rest
+  })
+}
+
+function numberButton({value, setValue, width, pattern = /^[0-9]*$/, ...rest}) {
+  return button({
+    height: 1,
+    width,
+    pattern,
+    click() {
+      this.captureKeys = true
+      this.text = ''
+    },
+    draw(ctx) {
+      if (this.captureKeys)  {
+        ctx.drawText(this.text.padStart(this.width, ' '), 0, 0,
+          App.skin.buttons.usable, App.skin.buttons.highlight)
+        ctx.drawText('_', this.width - 1, 0, WHITE)
+      } else
+        ctx.drawText(
+          value().padStart(this.width, ' '),
+          0, 0,
+          App.skin.buttons.usable, this.tmouse ? App.skin.buttons.highlight : App.skin.background)
+    },
+    keypress(e) {
+      if (!this.captureKeys) return
+      if (e.key === 'Enter') {
+        try {
+          setValue(this.text)
+        } finally {
+          this.captureKeys = false
+        }
+      }
+      if (this.text.length < this.width && this.pattern.test(this.text + e.key))
+        this.text += e.key
+    },
+    keydown(e) {
+      if (!this.captureKeys) return
+      if (e.code === 'Backspace') this.text = this.text.substring(0, this.text.length - 1)
+      if (e.code === 'Escape') this.captureKeys = false
+    },
     ...rest
   })
 }
@@ -108,9 +147,9 @@ function textToolOverlay({x, y}) {
     },
     captureKeys: true,
     exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
-    keydown(code) {
-      if (code === 'Escape') this.exit()
-      if (code === 'Backspace') this.text = this.text.substring(0, this.text.length - 1)
+    keydown(e) {
+      if (e.code === 'Escape') this.exit()
+      if (e.code === 'Backspace') this.text = this.text.substring(0, this.text.length - 1)
     },
     keypress(e) {
       if (e.key === 'Enter') {
@@ -147,7 +186,7 @@ function renameDialog(file) {
   return {
     x: 20,
     y: 2,
-    text: '',
+    text: file.name,
     draw(ctx) {
       const title = 'Enter Name'
       ctx.drawText(title, 2, 0, WHITE)
@@ -176,9 +215,9 @@ function renameDialog(file) {
     },
     captureKeys: true,
     exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
-    keydown(code) {
-      if (code === 'Escape') this.exit()
-      if (code === 'Backspace') this.text = this.text.substring(0, this.text.length - 1)
+    keydown(e) {
+      if (e.code === 'Escape') this.exit()
+      if (e.code === 'Backspace') this.text = this.text.substring(0, this.text.length - 1)
     },
     keypress(e) {
       if (e.key === 'Enter') {
@@ -244,9 +283,9 @@ function deleteDialog(file) {
     },
     captureKeys: true,
     exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
-    keydown(code) {
-      if (code === 'Escape') this.exit()
-      if (code === 'Enter') {
+    keydown(e) {
+      if (e.code === 'Escape') this.exit()
+      if (e.code === 'Enter') {
         doDeletion()
         this.exit()
       }
@@ -271,6 +310,262 @@ function deleteDialog(file) {
       }),
     ],
   }
+  return dialog
+}
+
+// https://stackoverflow.com/a/54070620
+function rgb2hsv(r,g,b) {
+  let v=Math.max(r,g,b), c=v-Math.min(r,g,b);
+  let h= c && ((v==r) ? (g-b)/c : ((v==g) ? 2+(b-r)/c : 4+(r-g)/c));
+  return [60*(h<0?h+6:h), v&&c/v, v];
+}
+// https://stackoverflow.com/a/54024653
+function hsv2rgb(h,s,v) {
+  let f= (n,k=(n+h/60)%6) => v - v*s*Math.max(Math.min(k,4-k,1), 0);
+  return [f(5),f(3),f(1)];
+}
+
+function colorChooser(initial, choose) {
+  let [h, s, v] = rgb2hsv(initial.r, initial.g, initial.b)
+  let major = 'hue'
+  const dialog = initUi({
+    x: 0,
+    y: 0,
+    captureKeys: true,
+    exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
+    keydown(e) {
+      if (e.code === 'Escape') this.exit()
+      e.stopPropagation()
+    },
+    children: [
+      // Color grid
+      {
+        x: 0,
+        y: 0,
+        width: 40,
+        height: 40,
+        draw(ctx) {
+          for (let y = 0; y < this.height; y++) for (let x = 0; x < this.width; x++) {
+            const ts = x / (this.width - 1)
+            const tv = 1 - (y / (this.height - 1))
+            const [r, g, b] = hsv2rgb(h, ts, tv)
+            ctx.drawText(' ', x, y, null, { r, g, b })
+          }
+          const selectedS = (s * (this.width - 1)) | 0
+          const selectedV = this.height - 1 - ((v * (this.height - 1)) | 0)
+          const [sr, sg, sb] = hsv2rgb(h, s, v)
+          const color = {r: sr, g: sg, b: sb}
+          const cw = Math.abs(apcaContrast(WHITE, color))
+          const cb = Math.abs(apcaContrast(BLACK, color))
+          const wb = cb > cw ? BLACK : WHITE
+          ctx.drawText('|', selectedS, selectedV-1, wb)
+          ctx.drawText('/', selectedS-1, selectedV+1, wb)
+          ctx.drawText('\\', selectedS+1, selectedV+1, wb)
+        },
+        mousedown({x, y, button}) {
+          if (button === 0) {
+            s = x / (this.width - 1)
+            v = 1 - y / (this.height - 1)
+          }
+        },
+        mousemove({x, y, buttons}) {
+          if (buttons & 1) {
+            s = x / (this.width - 1)
+            v = 1 - y / (this.height - 1)
+          }
+        },
+      },
+      // Hue slider
+      {
+        x: 40,
+        y: 0,
+        width: 6,
+        height: 40,
+        draw(ctx) {
+          for (let y = 0; y < this.height; y++) {
+            const th = y / (this.height - 1) * 360
+            const [r, g, b] = hsv2rgb(th, 1, 1)
+            ctx.drawText('  ', 0, y, null, BLACK)
+            ctx.drawText('  ', 2, y, null, { r, g, b })
+            ctx.drawText('  ', 4, y, null, BLACK)
+          }
+          const selectedH = (h / 360 * (this.height - 1)) | 0
+          ctx.drawText('-  -', 1, selectedH, WHITE)
+        },
+        mousedown({y, button}) {
+          if (button === 0)
+            h = y / (this.height - 1) * 360
+        },
+        mousemove({y, buttons}) {
+          if (buttons & 1)
+            h = y / (this.height - 1) * 360
+        },
+      },
+      // Sidebar
+      {
+        x: 46,
+        y: 0,
+        height: 40,
+        draw(ctx) {
+          for (let y = 0; y < 40; y++) for (let x = 0; x < 8; x++)
+            ctx.drawChar(0, x, y, null, App.skin.background)
+        },
+        children: [
+          button({
+            x: 47,
+            y: 1,
+            width: 5,
+            title() { return 'OK    ' },
+            click() {
+              const [r, g, b] = hsv2rgb(h, s, v)
+              choose({r, g, b})
+              dialog.exit()
+            },
+            keydown(e) {
+              if (e.code === 'Enter') this.click()
+            }
+          }),
+          button({
+            x: 47,
+            y: 2,
+            width: 5,
+            title() { return 'Cancel' },
+            click() {
+              dialog.exit()
+            }
+          }),
+          {
+            x: 47,
+            y: 4,
+            draw(ctx) {
+              ctx.drawText('New', 0, 0, App.skin.headers)
+              const [r,g,b] = hsv2rgb(h, s, v)
+              ctx.drawText('      ', 0, 1, null, { r, g, b })
+              ctx.drawText('      ', 0, 2, null, { r, g, b })
+              ctx.drawText('      ', 0, 3, null, initial)
+              ctx.drawText('      ', 0, 4, null, initial)
+              ctx.drawText('Old', 0, 5, App.skin.headers)
+            }
+          },
+
+          button({
+            x: 47,
+            y: 11,
+            width: 1,
+            title() { return '\u00fe' },
+            active() { return major === 'hue' },
+            click() { major = 'hue' },
+          }),
+          numberButton({
+            x: 50,
+            y: 11,
+            width: 3,
+            value() { return h.toFixed(0) },
+            setValue(v) { h = (Number(v)|0) % 360 },
+          }),
+          button({
+            x: 47,
+            y: 13,
+            width: 1,
+            title() { return '\u00fe' },
+            active() { return major === 'saturation' },
+            click() { major = 'saturation' },
+          }),
+          numberButton({
+            x: 50,
+            y: 13,
+            width: 3,
+            value() { return (s * 100).toFixed(0) },
+            setValue(v) { s = Math.max(0, Math.min(100, (Number(v)|0))) / 100 },
+          }),
+          button({
+            x: 47,
+            y: 15,
+            width: 1,
+            title() { return '\u00fe' },
+            active() { return major === 'value' },
+            click() { major = 'value' },
+          }),
+          numberButton({
+            x: 50,
+            y: 15,
+            width: 3,
+            value() { return (v * 100).toFixed(0) },
+            setValue(x) { v = Math.max(0, Math.min(100, (Number(x)|0))) / 100 },
+          }),
+          {
+            x: 48,
+            y: 11,
+            draw(ctx) {
+              ctx.drawText('H', 0, 0, App.skin.headers)
+              ctx.drawText('S', 0, 2, App.skin.headers)
+              ctx.drawText('V', 0, 4, App.skin.headers)
+            }
+          },
+          {
+            x: 48,
+            y: 18,
+            draw(ctx) {
+              ctx.drawText('R', 0, 0, App.skin.headers)
+              ctx.drawText('G', 0, 2, App.skin.headers)
+              ctx.drawText('B', 0, 4, App.skin.headers)
+            }
+          },
+          numberButton({
+            x: 50,
+            y: 18,
+            width: 3,
+            value() { return (hsv2rgb(h,s,v)[0] * 255).toFixed(0) },
+            setValue(nr) {
+              const [, g, b] = hsv2rgb(h,s,v);
+              [h, s, v] = rgb2hsv(Math.max(0, Math.min(255, Number(nr)))/255, g, b)
+            }
+          }),
+          numberButton({
+            x: 50,
+            y: 20,
+            width: 3,
+            value() { return (hsv2rgb(h,s,v)[1] * 255).toFixed(0) },
+            setValue(ng) {
+              const [r, , b] = hsv2rgb(h,s,v);
+              [h, s, v] = rgb2hsv(r, Math.max(0, Math.min(255, Number(ng)))/255, b)
+            }
+          }),
+          numberButton({
+            x: 50,
+            y: 22,
+            width: 3,
+            value() { return (hsv2rgb(h,s,v)[2] * 255).toFixed(0) },
+            setValue(nb) {
+              const [r, g] = hsv2rgb(h,s,v);
+              [h, s, v] = rgb2hsv(r, g, Math.max(0, Math.min(255, Number(nb)))/255)
+            }
+          }),
+          numberButton({
+            x: 47,
+            y: 24,
+            width: 6,
+            pattern: /^[0-9a-f]*$/i,
+            value() {
+              const [r, g, b] = hsv2rgb(h, s, v)
+              const hex = ((((r * 255)|0) << 16) | (((g * 255)|0) << 8) | ((b * 255)|0)).toString(16).padStart(6, '0')
+              return hex
+            },
+            setValue(hex) {
+              const num = parseInt(hex, 16)
+              if (!isNaN(num)) {
+                debugger
+                const r = (num & 0xff0000) >> 16
+                const g = (num & 0x00ff00) >> 8
+                const b = (num & 0x0000ff) >> 0
+                ;[h, s, v] = rgb2hsv(r/255, g/255, b/255)
+              }
+            }
+          }),
+        ],
+      }
+    ],
+  })
   return dialog
 }
 
@@ -432,23 +727,23 @@ const App = {
             ctx.drawText(App.paint.char.toString(16).padStart(2, '0'), 2, height + 1, App.skin.glyphs.aligned, borderBg)
             ctx.drawChar(BoxDrawing._URD, 4, height + 1, borderFg, borderBg)
           },
-          keydown(code) {
-            if (code === 'ArrowUp') {
+          keydown(e) {
+            if (e.code === 'ArrowUp') {
               const y = (App.paint.char / 16)|0
               const x = App.paint.char % 16
               App.paint.char = ((y + 15) % 16) * 16 + x
             }
-            if (code === 'ArrowDown') {
+            if (e.code === 'ArrowDown') {
               const y = (App.paint.char / 16)|0
               const x = App.paint.char % 16
               App.paint.char = ((y + 1) % 16) * 16 + x
             }
-            if (code === 'ArrowLeft') {
+            if (e.code === 'ArrowLeft') {
               const y = (App.paint.char / 16)|0
               const x = App.paint.char % 16
               App.paint.char = y * 16 + (x + 15) % 16
             }
-            if (code === 'ArrowRight') {
+            if (e.code === 'ArrowRight') {
               const y = (App.paint.char / 16)|0
               const x = App.paint.char % 16
               App.paint.char = y * 16 + (x + 1) % 16
@@ -471,7 +766,7 @@ const App = {
               ctx.drawChar(y*16+x, x, y, color, App.skin.background)
             }
           },
-          mousedown(x, y, button) {
+          mousedown({x, y, button}) {
             if (button === 0) {
               App.paint.char = y * 16 + x
             }
@@ -488,8 +783,8 @@ const App = {
             const newFont = fontConfig[newIdx]
             App.setFont(newFont).then(App.requestRedraw)
           },
-          keydown(code, mods) {
-            if (code === 'Comma' || (mods && code === 'PageUp' /* NB. only works in pwa */))
+          keydown(e) {
+            if (e.code === 'Comma' || ((e.ctrlKey || e.metaKey) && e.code === 'PageUp' /* NB. only works in pwa */))
               this.click()
           }
         }),
@@ -504,8 +799,8 @@ const App = {
             const newFont = fontConfig[newIdx]
             App.setFont(newFont).then(App.requestRedraw)
           },
-          keydown(code, mods) {
-            if (code === 'Period' || (mods && code === 'PageDown' /* NB. only works in pwa */))
+          keydown(e) {
+            if (e.code === 'Period' || ((e.ctrlKey || e.metaKey) && e.code === 'PageDown' /* NB. only works in pwa */))
               this.click()
           }
         }),
@@ -543,9 +838,9 @@ const App = {
           width: 16,
           height: 12,
           draw(ctx) {
-            for (let y = 0; y < (palette.length / 16)|0; y++) for (let x = 0; x < 16; x++) {
+            for (let y = 0; y < 12; y++) for (let x = 0; x < 16; x++) {
               const i = y * 16 + x
-              const color = palette[i]
+              const color = palette[i] ?? {r: 0, g: 0, b: 0}
               ctx.drawChar(0, x, y, null, color)
               if (i === App.selectedPalette.fg) {
                 const cw = Math.abs(apcaContrast(WHITE, color))
@@ -560,17 +855,32 @@ const App = {
               }
             }
           },
-          mousedown(x, y, button) {
+          mousedown({x, y, button}) {
             this.mouseWentDownInPalette = true
+            const i = y * 16 + x
             if (button === 0) {
-              App.paint.fg = palette[y * 16 + x]
-              App.selectedPalette.fg = y * 16 + x
+              if (App.selectedPalette.fg === i) {
+                App.ui.push(colorChooser(palette[i], (c) => {
+                  App.paint.fg = palette[i] = c
+                }))
+                this.mouseWentDownInPalette = false
+              } else {
+                App.paint.fg = palette[i]
+                App.selectedPalette.fg = i
+              }
             } else if (button === 2) {
-              App.paint.bg = palette[y * 16 + x]
-              App.selectedPalette.bg = y * 16 + x
+              if (App.selectedPalette.bg === i) {
+                App.ui.push(colorChooser(palette[i], (c) => {
+                  App.paint.bg = palette[i] = c
+                }))
+                this.mouseWentDownInPalette = false
+              } else {
+                App.paint.bg = palette[i]
+                App.selectedPalette.bg = i
+              }
             }
           },
-          mousemove(x, y, buttons) {
+          mousemove({x, y, buttons}) {
             if (!this.mouseWentDownInPalette) return
             if (buttons & 1) {
               App.paint.fg = palette[y * 16 + x]
@@ -626,8 +936,8 @@ const App = {
           width: 7,
           title() { return ' Undo  ' },
           click() { App.undo() },
-          keydown(code) {
-            if (code === 'KeyZ') App.undo()
+          keydown(e) {
+            if (e.code === 'KeyZ') App.undo()
           },
         }),
         button({
@@ -636,8 +946,8 @@ const App = {
           width: 7,
           title() { return ' Redo  ' },
           click() { App.redo() },
-          keydown(code) {
-            if (code === 'KeyY') App.redo()
+          keydown(e) {
+            if (e.code === 'KeyY') App.redo()
           },
         }),
 
@@ -711,7 +1021,7 @@ const App = {
                   if (layers.length > 0) {
                     const layer = layers[0]
                     const file = newFile()
-                    file.name = handle.name
+                    file.name = handle.name.replace(/\.xp$/, '')
                     file.data = layer.data
                     App.files.push(file)
                     App.selectedFile = App.files.length - 1
@@ -734,7 +1044,7 @@ const App = {
                     if (layers.length > 0) {
                       const layer = layers[0]
                       const file = newFile()
-                      file.name = f.name
+                      file.name = f.name.replace(/\.xp$/, '')
                       file.data = layer.data
                       App.files.push(file)
                       App.selectedFile = App.files.length - 1
@@ -838,13 +1148,13 @@ const App = {
             })
             ctx.drawChar(App.paint.char, 6, 0, WHITE)
           },
-          mousedown(_x, _y, button) {
+          mousedown({button}) {
             if (button === 0) {
               App.apply.glyph = !App.apply.glyph
             }
           },
-          keydown(code) {
-            if (code === 'KeyG') App.apply.glyph = !App.apply.glyph
+          keydown(e) {
+            if (e.code === 'KeyG') App.apply.glyph = !App.apply.glyph
           },
         },
         {
@@ -860,13 +1170,13 @@ const App = {
             })
             ctx.drawChar(0, 6, 0, null, App.paint.fg)
           },
-          mousedown(_x, _y, button) {
+          mousedown({button}) {
             if (button === 0) {
               App.apply.fg = !App.apply.fg
             }
           },
-          keydown(code) {
-            if (code === 'KeyF') App.apply.fg = !App.apply.fg
+          keydown(e) {
+            if (e.code === 'KeyF') App.apply.fg = !App.apply.fg
           },
         },
         {
@@ -882,13 +1192,13 @@ const App = {
             })
             ctx.drawChar(0, 6, 0, null, App.paint.bg)
           },
-          mousedown(_x, _y, button) {
+          mousedown({button}) {
             if (button === 0) {
               App.apply.bg = !App.apply.bg
             }
           },
-          keydown(code) {
-            if (code === 'KeyB') App.apply.bg = !App.apply.bg
+          keydown(e) {
+            if (e.code === 'KeyB') App.apply.bg = !App.apply.bg
           },
         },
 
@@ -930,7 +1240,7 @@ const App = {
           title: () => ` Cell ${App.toolOptions.joinCells ? '\u00c5' : '\u00c4'}`,
           active: () => App.tool === 'cell',
           click: () => App.selectTool('cell'),
-          keydown: (code) => code === 'KeyC' && App.selectTool('cell'),
+          keydown: ({code}) => code === 'KeyC' && App.selectTool('cell'),
         }),
         button({
           x: 10,
@@ -939,7 +1249,7 @@ const App = {
           title: () => ' Line  ',
           active: () => App.tool === 'line',
           click: () => App.selectTool('line'),
-          keydown: (code) => code === 'KeyL' && App.selectTool('line'),
+          keydown: ({code}) => code === 'KeyL' && App.selectTool('line'),
         }),
         button({
           x: 10,
@@ -948,7 +1258,7 @@ const App = {
           title: () => ` Rect ${App.toolOptions.fillRect ? '\u00fe' : '\u00ff'}`,
           active: () => App.tool === 'rect',
           click: () => App.selectTool('rect'),
-          keydown: (code) => code === 'KeyR' && App.selectTool('rect'),
+          keydown: ({code}) => code === 'KeyR' && App.selectTool('rect'),
         }),
         button({
           x: 10,
@@ -957,7 +1267,7 @@ const App = {
           title: () => ` Oval ${App.toolOptions.fillOval ? '\u00fe' : '\u00ff'}`,
           active: () => App.tool === 'oval',
           click: () => App.selectTool('oval'),
-          keydown: (code) => code === 'KeyO' && App.selectTool('oval'),
+          keydown: ({code}) => code === 'KeyO' && App.selectTool('oval'),
         }),
         button({
           x: 10,
@@ -966,7 +1276,7 @@ const App = {
           title: () => ' Fill  ',
           active: () => App.tool === 'fill',
           click: () => App.selectTool('fill'),
-          keydown: (code) => code === 'KeyI' && App.selectTool('fill'),
+          keydown: ({code}) => code === 'KeyI' && App.selectTool('fill'),
         }),
         button({
           x: 10,
@@ -975,7 +1285,7 @@ const App = {
           title: () => ' Text  ',
           active: () => App.tool === 'text',
           click: () => App.selectTool('text'),
-          keydown: (code) => code === 'KeyT' && App.selectTool('text'),
+          keydown: ({code}) => code === 'KeyT' && App.selectTool('text'),
         }),
         button({
           x: 10,
@@ -984,12 +1294,12 @@ const App = {
           title: () => ` Copy ${App.toolOptions.copyMode === 'copy' ? 'c' : 'x'}`,
           active: () => App.tool === 'copy',
           click: () => App.selectTool('copy'),
-          keydown: (code, mods) => {
-            if (mods && code === 'KeyC') {
+          keydown: (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') {
               App.tool = 'copy'
               App.toolOptions.copyMode = 'copy'
             }
-            if (mods && code === 'KeyX') {
+            if ((e.ctrlKey || e.metaKey) && e.code === 'KeyX') {
               App.tool = 'copy'
               App.toolOptions.copyMode = 'cut'
             }
@@ -1002,7 +1312,7 @@ const App = {
           title: () => ' Paste ',
           active: () => App.tool === 'paste',
           click: () => App.selectTool('paste'),
-          keydown: (code, mods) => mods && code === 'KeyV' && App.selectTool('paste'),
+          keydown: (e) => (e.ctrlKey || e.metaKey) && e.code === 'KeyV' && App.selectTool('paste'),
         }),
 
         // -- Info --
@@ -1105,7 +1415,7 @@ const App = {
               }
             })
           },
-          mousedown(x, y, button) {
+          mousedown({x, y, button}) {
             if (button === 0) {
               if (y < App.files.length) {
                 if (x === 0) {
@@ -1119,7 +1429,7 @@ const App = {
                 App.ui.push(renameDialog(App.files[App.selectedFile]))
             }
           },
-          keydown(code) {
+          keydown({code}) {
             if (code === 'ArrowDown') {
               App.selectedFile = (App.selectedFile + 1) % App.files.length
             } else if (code === 'ArrowUp') {
@@ -1239,6 +1549,7 @@ const App = {
         return paint
       },
       paint(x, y) {
+        if (!this.lastPaint) return
         bresenhamLine(this.lastPaint.x, this.lastPaint.y, x, y, (x, y) => {
           if (App.toolOptions.joinCells && App.apply.glyph) {
             const {x, y} = this.tmouse
@@ -1270,7 +1581,7 @@ const App = {
         }
         App.finishChange()
       },
-      mousedown(x, y, button) {
+      mousedown({x, y, button}) {
         if (button === 0) {
           if (App.tool === 'cell') {
             App.beginChange()
@@ -1291,18 +1602,21 @@ const App = {
             if (App.apply.glyph) App.paint.char = paint.char ?? 0
             if (App.apply.fg) {
               App.paint.fg = paint.fg ?? DefaultForeground
-              const idx = palette.findIndex(c => c.r === App.paint.fg.r && c.g === App.paint.fg.g && c.b === App.paint.fg.g)
+              const idx = palette.findIndex(c => c.r === App.paint.fg.r && c.g === App.paint.fg.g && c.b === App.paint.fg.b)
               if (idx >= 0) App.selectedPalette.fg = idx
+              else App.selectedPalette.fg = null
             }
             if (App.apply.bg) {
               App.paint.bg = paint.bg ?? DefaultBackground
-              const idx = palette.findIndex(c => c.r === App.paint.bg.r && c.g === App.paint.bg.g && c.b === App.paint.bg.g)
+              const idx = palette.findIndex(c => c.r === App.paint.bg.r && c.g === App.paint.bg.g && c.b === App.paint.bg.b)
               if (idx >= 0) App.selectedPalette.bg = idx
+              else App.selectedPalette.bg = null
             }
           }
         }
       },
-      mouseup(x, y, button) {
+      mouseup({x, y, button}) {
+        debugger
         if (button === 0) {
           if (App.tool === 'cell') {
             App.finishChange()
@@ -1353,14 +1667,14 @@ const App = {
           }
         }
       },
-      keydown(code) {
+      keydown({code}) {
         if (code === 'Escape') this.toolStart = null
       },
       blur() {
         this.toolStart = null
         App.finishChange() // noop if there's no change happening.
       },
-      mousemove(x, y, buttons) {
+      mousemove({x, y, buttons}) {
         if (App.tool === 'cell') {
           if (buttons & 1) this.paint(x, y)
         }
@@ -1401,11 +1715,23 @@ const App = {
   *eachUi() {
     yield* iterate(this.ui)
     function* iterate(els) {
-      for (const el of els) {
+      for (const el of els.slice()) {
         const display = el.display ?? true
         if (display && (typeof display !== 'function' || display())) {
           yield el
           yield* iterate(el.children ?? [])
+        }
+      }
+    }
+  },
+  *eachUiReverse() {
+    yield* iterate(this.ui)
+    function* iterate(els) {
+      for (const el of els.slice().reverse()) {
+        const display = el.display ?? true
+        if (display && (typeof display !== 'function' || display())) {
+          yield* iterate(el.children ?? [])
+          yield el
         }
       }
     }
@@ -1442,55 +1768,63 @@ const App = {
       }
     }
   },
-  mousemove() {
+  mousemove(e) {
     const { x, y } = this.tmouse
-    for (const el of this.eachUi()) {
+    for (const el of this.eachUiReverse()) {
       if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
-        if (el.mousemove)
-          el.mousemove(x - el.x, y - el.y, this.mouseButtons)
+        if (el.mousemove) {
+          e.x = x - el.x
+          e.y = y - el.y
+          el.mousemove(e)
+        }
+      if (e.propagationStopped) break
     }
   },
-  mousedown(button) {
+  mousedown(e) {
     const { x, y } = this.tmouse
-    for (const el of this.eachUi())
+    for (const el of this.eachUiReverse()) {
       if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
-        if (el.mousedown)
-          el.mousedown(x - el.x, y - el.y, button)
+        if (el.mousedown) {
+          e.x = x - el.x
+          e.y = y - el.y
+          el.mousedown(e)
+        }
+      if (e.propagationStopped || el.captureKeys) break
+    }
   },
-  mouseup(button) {
+  mouseup(e) {
     if (this.tmouse) {
       const { x, y } = this.tmouse
-      for (const el of this.eachUi())
-        if (el.mouseup)
-          el.mouseup(x - el.x, y - el.y, button)
+      for (const el of this.eachUiReverse()) {
+        if (el.mouseup) {
+          e.x = x - el.x
+          e.y = y - el.y
+          el.mouseup(e)
+        }
+        if (e.propagationStopped || el.captureKeys) break
+      }
     }
   },
-  keydown(code, mods) {
-    for (const el of this.eachUi())
-      if (el.captureKeys) {
-        if (el.keydown) el.keydown(code, mods)
-        return
-      }
-    for (const el of this.eachUi())
+  keydown(e) {
+    for (const el of this.eachUiReverse()) {
       if (el.keydown)
-        el.keydown(code, mods)
-    if (code === 'Tab') {
+        el.keydown(e)
+      if (e.propagationStopped || el.captureKeys) break
+    }
+    if (e.code === 'Tab') {
       App.sidebar = App.sidebar === 'paint' ? 'browse' : 'paint'
       event.preventDefault()
     }
   },
   keypress(e) {
-    for (const el of this.eachUi())
-      if (el.captureKeys) {
-        if (el.keypress) el.keypress(e)
-        return
-      }
-    for (const el of this.eachUi())
+    for (const el of this.eachUiReverse()) {
       if (el.keypress)
         el.keypress(e)
+      if (e.propagationStopped || el.captureKeys) break
+    }
   },
   blur() {
-    for (const el of this.eachUi())
+    for (const el of this.eachUiReverse())
       if (el.blur)
         el.blur()
   }
@@ -1617,7 +1951,14 @@ async function start() {
   window.addEventListener('mousemove', (e) => {
     if (document.hasFocus()) {
       App.mouse = { x: e.clientX, y: e.clientY }
-      App.mousemove()
+      App.mousemove({
+        x: e.clientX,
+        y: e.clientY,
+        buttons: e.buttons,
+        stopPropagation() {
+          this.propagationStopped = true
+        }
+      })
       dirty()
     }
   })
@@ -1625,12 +1966,28 @@ async function start() {
   canvas.addEventListener('mousedown', (e) => {
     App.mouse = { x: e.clientX, y: e.clientY }
     App.mouseButtons = e.buttons
-    App.mousedown(e.button)
+    App.mousedown({
+      x: e.clientX,
+      y: e.clientY,
+      button: e.button,
+      buttons: e.buttons,
+      stopPropagation() {
+        this.propagationStopped = true
+      }
+    })
     dirty()
   })
   window.addEventListener('mouseup', (e) => {
     App.mouseButtons = e.buttons
-    App.mouseup(e.button)
+    App.mouseup({
+      x: e.clientX,
+      y: e.clientY,
+      button: e.button,
+      buttons: e.buttons,
+      stopPropagation() {
+        this.propagationStopped = true
+      }
+    })
     dirty()
   })
   canvas.addEventListener('contextmenu', (e) => e.preventDefault())
@@ -1642,12 +1999,29 @@ async function start() {
   })
 
   window.addEventListener('keydown', (e) => {
-    App.keydown(e.code, e.ctrlKey || e.metaKey /* TODO */)
+    App.keydown({
+      code: e.code,
+      metaKey: e.metaKey,
+      altKey: e.altKey,
+      shiftKey: e.shiftKey,
+      stopPropagation() {
+        this.propagationStopped = true
+      }
+    })
     dirty()
   })
 
   window.addEventListener('keypress', (e) => {
-    App.keypress(e)
+    App.keypress({
+      code: e.code,
+      key: e.key,
+      metaKey: e.metaKey,
+      altKey: e.altKey,
+      shiftKey: e.shiftKey,
+      stopPropagation() {
+        this.propagationStopped = true
+      }
+    })
     dirty()
   })
 }
