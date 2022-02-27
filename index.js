@@ -464,6 +464,7 @@ function colorChooser(initial, choose) {
             width: 3,
             value() { return h.toFixed(0) },
             setValue(v) { h = (Number(v)|0) % 360 },
+            // TODO: 'H' should select this box
           }),
           button({
             display: false, // TODO: make this work
@@ -1318,7 +1319,7 @@ const App = {
         // -- Info --
         {
           x: 0,
-          y: 49, // TODO: move down
+          y: 49,
           draw(ctx) {
             const title = 'Info';
             ctx.drawText(title, 2, 0, App.skin.headers, App.skin.background)
@@ -1827,47 +1828,53 @@ const App = {
   mousedown(e) {
     const { x, y } = this.tmouse
     for (const el of this.eachUiReverse()) {
+      const keyWasCaptured = el.captureKeys
       if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
         if (el.mousedown) {
           e.x = x - el.x
           e.y = y - el.y
           el.mousedown(e)
         }
-      if (e.propagationStopped || el.captureKeys) break
+      if (e.propagationStopped || keyWasCaptured) break
     }
   },
   mouseup(e) {
     if (this.tmouse) {
       const { x, y } = this.tmouse
       for (const el of this.eachUiReverse()) {
-        if (el.mouseup) {
-          e.x = x - el.x
-          e.y = y - el.y
-          el.mouseup(e)
-        }
-        if (e.propagationStopped || el.captureKeys) break
+        const keyWasCaptured = el.captureKeys
+        if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
+          if (el.mouseup) {
+            e.x = x - el.x
+            e.y = y - el.y
+            el.mouseup(e)
+          }
+        if (e.propagationStopped || keyWasCaptured) break
       }
     }
   },
   keydown(e) {
     for (const el of this.eachUiReverse()) {
+      const keyWasCaptured = el.captureKeys
       if (el.keydown)
         el.keydown(e)
-      if (e.propagationStopped || el.captureKeys) break
+      if (e.propagationStopped || keyWasCaptured) break
     }
   },
   keyup(e) {
     for (const el of this.eachUiReverse()) {
+      const keyWasCaptured = el.captureKeys
       if (el.keyup)
         el.keyup(e)
-      if (e.propagationStopped || el.captureKeys) break
+      if (e.propagationStopped || keyWasCaptured) break
     }
   },
   keypress(e) {
     for (const el of this.eachUiReverse()) {
+      const keyWasCaptured = el.captureKeys
       if (el.keypress)
         el.keypress(e)
-      if (e.propagationStopped || el.captureKeys) break
+      if (e.propagationStopped || keyWasCaptured) break
     }
   },
   blur() {
