@@ -455,6 +455,7 @@ function colorChooser(initial, choose) {
           },
 
           button({
+            display: false, // TODO: make this work
             x: 47,
             y: 11,
             width: 1,
@@ -470,6 +471,7 @@ function colorChooser(initial, choose) {
             setValue(v) { h = (Number(v)|0) % 360 },
           }),
           button({
+            display: false, // TODO: make this work
             x: 47,
             y: 13,
             width: 1,
@@ -485,6 +487,7 @@ function colorChooser(initial, choose) {
             setValue(v) { s = Math.max(0, Math.min(100, (Number(v)|0))) / 100 },
           }),
           button({
+            display: false, // TODO: make this work
             x: 47,
             y: 15,
             width: 1,
@@ -1154,46 +1157,52 @@ const App = {
             if (e.code === 'KeyG') App.apply.glyph = !App.apply.glyph
           },
         },
-        {
+        button({
           x: 10,
           y: 35,
-          width: 7,
-          height: 1,
+          width: 6,
+          active() { return App.apply.fg },
+          title() { return ' Fore ' },
+          click() { App.apply.fg = !App.apply.fg },
+          keydown(e) { if (e.code === 'KeyF') this.click() },
+        }),
+        button({
+          x: 16,
+          y: 35,
+          width: 1,
           draw(ctx) {
-            const fg = App.apply.fg ? App.skin.buttons.active : App.skin.buttons.inactive;
-            const bg = this.tmouse ? App.skin.buttons.highlight : null;
-            ctx.drawText(' Fore  ', 0, 0, fg, bg)
-            ctx.drawChar(0, 6, 0, null, App.paint.fg)
+            ctx.drawChar(0, 0, 0, null, App.paint.fg)
           },
-          mousedown({button}) {
-            if (button === 0) {
-              App.apply.fg = !App.apply.fg
-            }
+          click() {
+            App.ui.push(colorChooser(App.paint.fg, (c) => {
+              App.paint.fg = c
+              // TODO: also update selectedPalette
+            }))
           },
-          keydown(e) {
-            if (e.code === 'KeyF') App.apply.fg = !App.apply.fg
-          },
-        },
-        {
+        }),
+        button({
           x: 10,
           y: 36,
-          width: 7,
-          height: 1,
+          width: 6,
+          title() { return ' Back ' },
+          active() { return App.apply.bg },
+          click() { App.apply.bg = !App.apply.bg },
+          keydown(e) { if (e.code === 'KeyB') this.click() },
+        }),
+        button({
+          x: 16,
+          y: 36,
+          width: 1,
           draw(ctx) {
-            const fg = App.apply.bg ? App.skin.buttons.active : App.skin.buttons.inactive;
-            const bg = this.tmouse ? App.skin.buttons.highlight : null;
-            ctx.drawText(' Back  ', 0, 0, fg, bg)
-            ctx.drawChar(0, 6, 0, null, App.paint.bg)
+            ctx.drawChar(0, 0, 0, null, App.paint.bg)
           },
-          mousedown({button}) {
-            if (button === 0) {
-              App.apply.bg = !App.apply.bg
-            }
+          click() {
+            App.ui.push(colorChooser(App.paint.bg, (c) => {
+              App.paint.bg = c
+              // TODO: also update selectedPalette
+            }))
           },
-          keydown(e) {
-            if (e.code === 'KeyB') App.apply.bg = !App.apply.bg
-          },
-        },
+        }),
 
         // -- Draw --
         {
