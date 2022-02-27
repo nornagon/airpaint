@@ -352,8 +352,8 @@ function colorChooser(initial, choose) {
             const [r, g, b] = hsv2rgb(h, ts, tv)
             ctx.drawText(' ', x, y, null, { r, g, b })
           }
-          const selectedS = (s * (this.width - 1)) | 0
-          const selectedV = this.height - 1 - ((v * (this.height - 1)) | 0)
+          const selectedS = Math.min(this.width - 1, (s * this.width) | 0)
+          const selectedV = Math.max(0, this.height - 1 - ((v * this.height)|0))
           const [sr, sg, sb] = hsv2rgb(h, s, v)
           const color = {r: sr, g: sg, b: sb}
           const cw = Math.abs(apcaContrast(WHITE, color))
@@ -365,6 +365,11 @@ function colorChooser(initial, choose) {
         },
         mousedown({x, y, button}) {
           if (button === 0) {
+            if (((s*this.width)|0) === x && (((1 - v) * this.height)|0) === y) {
+              const [r, g, b] = hsv2rgb(h, s, v)
+              choose({r, g, b})
+              dialog.exit()
+            }
             s = x / (this.width - 1)
             v = 1 - y / (this.height - 1)
           }
@@ -378,20 +383,20 @@ function colorChooser(initial, choose) {
       },
       // Hue slider
       {
-        x: 40,
+        x: 42,
         y: 0,
-        width: 6,
+        width: 2,
         height: 40,
         draw(ctx) {
           for (let y = 0; y < this.height; y++) {
             const th = y / (this.height - 1) * 360
             const [r, g, b] = hsv2rgb(th, 1, 1)
-            ctx.drawText('  ', 0, y, null, BLACK)
-            ctx.drawText('  ', 2, y, null, { r, g, b })
-            ctx.drawText('  ', 4, y, null, BLACK)
+            ctx.drawText('  ', -2, y, null, BLACK)
+            ctx.drawText('  ', 0, y, null, { r, g, b })
+            ctx.drawText('  ', 2, y, null, BLACK)
           }
           const selectedH = (h / 360 * (this.height - 1)) | 0
-          ctx.drawText('-  -', 1, selectedH, WHITE)
+          ctx.drawText('-  -', -1, selectedH, WHITE)
         },
         mousedown({y, button}) {
           if (button === 0)
@@ -555,7 +560,6 @@ function colorChooser(initial, choose) {
             setValue(hex) {
               const num = parseInt(hex, 16)
               if (!isNaN(num)) {
-                debugger
                 const r = (num & 0xff0000) >> 16
                 const g = (num & 0x00ff00) >> 8
                 const b = (num & 0x0000ff) >> 0
@@ -1197,7 +1201,7 @@ const App = {
           y: 39,
           draw(ctx) {
             const title = 'Draw';
-            ctx.drawText('Draw', 2, 0, fg, bg)
+            ctx.drawText('Draw', 2, 0, App.skin.headers, App.skin.background)
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
             const height = 8
@@ -1601,7 +1605,6 @@ const App = {
         }
       },
       mouseup({x, y, button}) {
-        debugger
         if (button === 0) {
           if (App.tool === 'cell') {
             App.finishChange()
