@@ -653,12 +653,14 @@ const App = {
     fillOval: false,
     joinCells: false,
     copyMode: 'copy',
+    fillEightNeighborhood: false,
   },
   selectTool(tool) {
     if (tool === 'cell' && this.tool === 'cell') this.toolOptions.joinCells = !this.toolOptions.joinCells
     if (tool === 'rect' && this.tool === 'rect') this.toolOptions.fillRect = !this.toolOptions.fillRect
     if (tool === 'oval' && this.tool === 'oval') this.toolOptions.fillOval = !this.toolOptions.fillOval
     if (tool === 'copy' && this.tool === 'copy') this.toolOptions.copyMode = this.toolOptions.copyMode === 'copy' ? 'cut' : 'copy'
+    if (tool === 'fill' && this.tool === 'fill') this.toolOptions.fillEightNeighborhood = !this.toolOptions.fillEightNeighborhood
     this.tool = tool
   },
   skin: {
@@ -1274,7 +1276,7 @@ const App = {
           x: 10,
           y: 44,
           width: 7,
-          title: () => ' Fill  ',
+          title: () => ` Fill ${App.toolOptions.fillEightNeighborhood ? '*' : '+'}`,
           active: () => App.tool === 'fill',
           click: () => App.selectTool('fill'),
           keydown: ({code}) => code === 'KeyI' && App.selectTool('fill'),
