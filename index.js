@@ -257,7 +257,7 @@ function deleteDialog(file) {
     y: 2,
     draw(ctx) {
       const title = 'Confirm Deletion';
-      ctx.drawText(title, 2, 0, WHITE)
+      ctx.drawText(title, 2, 0, App.skin.headers, App.skin.background)
       const borderFg = App.skin.borders
       const borderBg = App.skin.background
       const height = 3
@@ -325,6 +325,7 @@ function hsv2rgb(h,s,v) {
   return [f(5),f(3),f(1)];
 }
 
+// Color chooser / picker
 function colorChooser(initial, choose) {
   let [h, s, v] = rgb2hsv(initial.r, initial.g, initial.b)
   let major = 'hue'
@@ -680,9 +681,7 @@ const App = {
       x: 0,
       y: 0,
       draw(ctx) {
-        [...'    [     |      ]'].forEach((x, i)  => {
-          ctx.drawChar(x.charCodeAt(0), i, 0, App.skin.headers, App.skin.background)
-        })
+        ctx.drawText('    [     |      ]', 0, 0, App.skin.headers, App.skin.background)
       },
     },
     button({
@@ -904,10 +903,8 @@ const App = {
           x: 0,
           y: 33,
           draw(ctx) {
-            const title = 'Tools';
-            [...title].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, App.skin.headers, App.skin.background)
-            })
+            const title = 'Tools'
+            ctx.drawText(title, 2, 0, App.skin.headers, App.skin.background)
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
             const height = 6
@@ -1110,9 +1107,7 @@ const App = {
           x: 9,
           y: 33,
           draw(ctx) {
-            [...'Apply'].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, App.skin.headers, App.skin.background)
-            })
+            ctx.drawText('Apply', 2, 0, App.skin.headers, App.skin.background)
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
             const height = 4
@@ -1143,9 +1138,7 @@ const App = {
           draw(ctx) {
             const fg = App.apply.glyph ? App.skin.buttons.active : App.skin.buttons.inactive;
             const bg = this.tmouse ? App.skin.buttons.highlight : null;
-            [...' Glyph '].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
-            })
+            ctx.drawText(' Glyph ', 0, 0, fg, bg)
             ctx.drawChar(App.paint.char, 6, 0, WHITE)
           },
           mousedown({button}) {
@@ -1165,9 +1158,7 @@ const App = {
           draw(ctx) {
             const fg = App.apply.fg ? App.skin.buttons.active : App.skin.buttons.inactive;
             const bg = this.tmouse ? App.skin.buttons.highlight : null;
-            [...' Fore  '].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
-            })
+            ctx.drawText(' Fore  ', 0, 0, fg, bg)
             ctx.drawChar(0, 6, 0, null, App.paint.fg)
           },
           mousedown({button}) {
@@ -1187,9 +1178,7 @@ const App = {
           draw(ctx) {
             const fg = App.apply.bg ? App.skin.buttons.active : App.skin.buttons.inactive;
             const bg = this.tmouse ? App.skin.buttons.highlight : null;
-            [...' Back  '].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), i, 0, fg, bg)
-            })
+            ctx.drawText(' Back  ', 0, 0, fg, bg)
             ctx.drawChar(0, 6, 0, null, App.paint.bg)
           },
           mousedown({button}) {
@@ -1208,9 +1197,7 @@ const App = {
           y: 39,
           draw(ctx) {
             const title = 'Draw';
-            [...title].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, App.skin.headers, App.skin.background)
-            })
+            ctx.drawText('Draw', 2, 0, fg, bg)
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
             const height = 8
@@ -1321,9 +1308,7 @@ const App = {
           y: 49, // TODO: move down
           draw(ctx) {
             const title = 'Info';
-            [...title].forEach((c, i) => {
-              ctx.drawChar(c.charCodeAt(0), 2+i, 0, App.skin.headers, App.skin.background)
-            })
+            ctx.drawText(title, 2, 0, App.skin.headers, App.skin.background)
             const borderFg = App.skin.borders
             const borderBg = App.skin.background
             const height = 3
@@ -1484,13 +1469,13 @@ const App = {
                 ctx.drawChar(char, x+dx, y+dy, fg, bg)
               }
             } else {
-              const { char = ' '.charCodeAt(0), fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
+              const { char = 0, fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
               ctx.drawChar(char, this.tmouse.x, this.tmouse.y, fg, bg)
             }
           }
           if (App.tool === 'line' && this.toolStart) {
             bresenhamLine(this.toolStart.x, this.toolStart.y, this.tmouse.x, this.tmouse.y, (x, y) => {
-              const { char = ' '.charCodeAt(0), fg, bg } = this.applied(x, y)
+              const { char = 0, fg, bg } = this.applied(x, y)
               ctx.drawChar(char, x, y, fg, bg)
             })
           }
@@ -1500,14 +1485,14 @@ const App = {
             const ly = Math.min(this.toolStart.y, this.tmouse.y)
             const hy = Math.max(this.toolStart.y, this.tmouse.y)
             for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
-              const { char = ' '.charCodeAt(0), fg, bg } = this.applied(x, y)
+              const { char = 0, fg, bg } = this.applied(x, y)
               if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
                 ctx.drawChar(char, x, y, fg, bg)
             }
           }
           if (App.tool === 'oval' && this.toolStart) {
             (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(this.tmouse.x - this.toolStart.x), Math.abs(this.tmouse.y - this.toolStart.y), (x, y) => {
-              const { char = ' '.charCodeAt(0), fg, bg } = this.applied(x, y)
+              const { char = 0, fg, bg } = this.applied(x, y)
               ctx.drawChar(char, x, y, fg, bg)
             })
           }
