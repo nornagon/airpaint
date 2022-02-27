@@ -1516,7 +1516,7 @@ const App = {
             return
           }
           if (App.tool === 'cell') {
-            if (App.toolOptions.joinCells && (isSingleBoxDrawingChar(App.paint.char) || isDoubleBoxDrawingChar(App.paint.char))) {
+            if (App.toolOptions.joinCells) {
               const {x, y} = this.tmouse
               const get = (tx, ty) => {
                 if (tx === x && ty === y && App.apply.glyph) return App.paint.char
@@ -1595,7 +1595,7 @@ const App = {
       paint(x, y) {
         if (!this.lastPaint) return
         bresenhamLine(this.lastPaint.x, this.lastPaint.y, x, y, (x, y) => {
-          if (App.toolOptions.joinCells && App.apply.glyph && (isSingleBoxDrawingChar(App.paint.char) || isDoubleBoxDrawingChar(App.paint.char))) {
+          if (App.toolOptions.joinCells && App.apply.glyph) {
             const {x, y} = this.tmouse
             const get = (tx, ty) => {
               if (tx === x && ty === y && App.apply.glyph) return App.paint.char
