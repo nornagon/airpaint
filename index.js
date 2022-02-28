@@ -348,7 +348,7 @@ function colorChooser(initial, choose) {
             const ts = x / (this.width - 1)
             const tv = 1 - (y / (this.height - 1))
             const [r, g, b] = hsv2rgb(h, ts, tv)
-            ctx.drawText(' ', x, y, null, { r, g, b })
+            ctx.drawText(' ', x, y, {r: 1, g: 1, b: 1}, { r, g, b })
           }
           const selectedS = Math.min(this.width - 1, (s * this.width) | 0)
           const selectedV = Math.max(0, this.height - 1 - ((v * this.height)|0))
