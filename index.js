@@ -157,7 +157,7 @@ function textToolOverlay({x, y, tx, ty}) {
         const lines = this.text.split('\n')
         lines.forEach((line, y) => {
           for (let i = 0; i < line.length; i++) {
-            App.map.set(`${tx + i},${ty + y}`, this.applied(tx + i, ty + y, line.charCodeAt(i)))
+            App.currentLayer.set(`${tx + i},${ty + y}`, this.applied(tx + i, ty + y, line.charCodeAt(i)))
           }
         })
         App.finishChange()
@@ -167,7 +167,7 @@ function textToolOverlay({x, y, tx, ty}) {
       this.text += e.key
     },
     applied(x, y, c) {
-      const paint = { fg: DefaultForeground, bg: DefaultBackground, char: 0, ...(App.map.get(`${x},${y}`) ?? {}) }
+      const paint = { fg: DefaultForeground, bg: DefaultBackground, char: 0, ...(App.currentLayer.get(`${x},${y}`) ?? {}) }
       if (App.apply.glyph) paint.char = c
       if (App.apply.fg) paint.fg = App.paint.fg
       if (App.apply.bg) paint.bg = App.paint.bg
@@ -229,7 +229,10 @@ function renameDialog(file) {
 function newFile() {
   return {
     name: 'unnamed',
-    data: new Map,
+    layers: [
+      new Map,
+    ],
+    selectedLayer: 0,
     undoStack: [],
     redoStack: [],
   }
@@ -582,28 +585,30 @@ const App = {
     newFile()
   ],
   selectedFile: 0,
-  get map() {
-    return this.files[this.selectedFile].data
+  get currentFile() {
+    return this.files[this.selectedFile]
   },
-  set map(x) {
-    this.files[this.selectedFile].data = x
+  get currentLayer() {
+    return this.currentFile.layers[this.currentFile.selectedLayer]
   },
   get undoStack() {
-    return this.files[this.selectedFile].undoStack
+    return this.currentFile.undoStack
   },
   set undoStack(x) {
-    this.files[this.selectedFile].undoStack = x
+    this.currentFile.undoStack = x
   },
   get redoStack() {
-    return this.files[this.selectedFile].redoStack
+    return this.currentFile.redoStack
   },
   set redoStack(x) {
-    this.files[this.selectedFile].redoStack = x
+    this.currentFile.redoStack = x
   },
   beginChange() {
     if (this.changing) return
     this.changing = true
-    this.undoStack.push(new Map(this.map))
+    const changingLayer = this.currentFile.selectedLayer
+    const savedLayers = this.currentFile.layers.map((x, i) => i === changingLayer ? new Map(x) : x)
+    this.undoStack.push(savedLayers)
     while (this.undoStack.length > MAX_UNDO_STEPS)
       this.undoStack.shift()
     this.redoStack = []
@@ -615,14 +620,14 @@ const App = {
   },
   undo() {
     if (this.changing || !this.undoStack.length) return
-    this.redoStack.push(this.map)
-    this.map = this.undoStack.pop()
+    this.redoStack.push(this.currentFile.layers)
+    this.currentFile.layers = this.undoStack.pop()
     this.save()
   },
   redo() {
     if (this.changing || !this.redoStack.length) return
-    this.undoStack.push(this.map)
-    this.map = this.redoStack.pop()
+    this.undoStack.push(this.currentFile.layers)
+    this.currentFile.layers = this.redoStack.pop()
     this.save()
   },
   save() {
@@ -1001,12 +1006,7 @@ const App = {
           width: 7,
           title() { return ' New   ' },
           click() {
-            App.files.push({
-              name: 'unnamed',
-              data: new Map,
-              undoStack: [],
-              redoStack: [],
-            })
+            App.files.push(newFile())
             App.selectedFile = App.files.length - 1
             App.save()
           },
@@ -1034,10 +1034,10 @@ const App = {
                 try {
                   const { layers } = await xp.read(await handle.getFile())
                   if (layers.length > 0) {
-                    const layer = layers[0]
                     const file = newFile()
                     file.name = handle.name.replace(/\.xp$/, '')
-                    file.data = layer.data
+                    file.layers = layers.map(l => l.data)
+                    file.selectedLayer = 0
                     App.files.push(file)
                     App.selectedFile = App.files.length - 1
                   }
@@ -1057,10 +1057,10 @@ const App = {
                   try {
                     const { layers } = await xp.read(f)
                     if (layers.length > 0) {
-                      const layer = layers[0]
                       const file = newFile()
                       file.name = f.name.replace(/\.xp$/, '')
-                      file.data = layer.data
+                      file.layers = layers.map(l => l.data)
+                      file.selectedLayer = 0
                       App.files.push(file)
                       App.selectedFile = App.files.length - 1
                     }
@@ -1096,7 +1096,7 @@ const App = {
                 const writable = await handle.createWritable()
                 const rxpBlob = await xp.write({
                   version: 0xffffffff,
-                  layers: [ { data: App.map } ],
+                  layers: App.currentFile.layers.map(data => ({data})),
                 })
                 const buf = await rxpBlob.arrayBuffer()
                 await writable.write(buf)
@@ -1106,7 +1106,7 @@ const App = {
               const a = document.createElement('a')
               const rxpBlob = await xp.write({
                 version: 0xffffffff,
-                layers: [ { data: App.map } ],
+                layers: App.currentFile.layers.map(data => ({data})),
               })
               const url = URL.createObjectURL(rxpBlob)
               try {
@@ -1359,7 +1359,7 @@ const App = {
             ctx.drawText(`Back`, 1, 2, {r: 0.5,g:0.5,b:0.5})
             if (canvas.tmouse) {
               const {x, y} = canvas.tmouse
-              const { fg, bg } = App.map.get(`${x},${y}`) ?? {}
+              const { fg, bg } = App.currentLayer.get(`${x},${y}`) ?? {}
               if (fg) {
                 const {r, g, b} = fg
                 ctx.drawText(`${[r,g,b].map(c => ((c*255)|0).toString().padStart(3, ' ')).join(' ')}`, 6, 1, App.skin.headers)
@@ -1508,7 +1508,7 @@ const App = {
           if (x - this.offsetX < 0 || y - this.offsetY < 0) return
           ctx.drawChar(c, x - this.offsetX, y - this.offsetY, fg, bg)
         }
-        for (const [k, v] of App.map.entries()) {
+        for (const [k, v] of App.currentLayer.entries()) {
           const [x, y] = k.split(',')
           const { char, fg, bg } = v
           drawChar(char ?? 0x20, +x, +y, fg, bg)
@@ -1524,7 +1524,7 @@ const App = {
               const {x, y} = this.tmouse
               const get = (tx, ty) => {
                 if (tx === x && ty === y && App.apply.glyph) return App.paint.char
-                else return App.map.get(`${tx},${ty}`)?.char ?? 0
+                else return App.currentLayer.get(`${tx},${ty}`)?.char ?? 0
               }
               const {fg, bg, char: appliedChar} = this.applied(x, y)
               for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
@@ -1604,7 +1604,7 @@ const App = {
           if (App.tool === 'paste' && App.pasteboard) {
             for (const [k, v] of App.pasteboard.entries()) {
               const [x, y] = k.split(',').map(i => +i)
-              const paint = { ...(App.map.get(`${x + this.tmouse.x},${y + this.tmouse.y}`) ?? {}) }
+              const paint = { ...(App.currentLayer.get(`${x + this.tmouse.x},${y + this.tmouse.y}`) ?? {}) }
               if (App.apply.glyph) paint.char = v.char
               if (App.apply.fg) paint.fg = v.fg
               if (App.apply.bg) paint.bg = v.bg
@@ -1615,7 +1615,7 @@ const App = {
       },
       applied(x, y, p) {
         if (!p) p = App.paint
-        const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
+        const paint = { ...(App.currentLayer.get(`${x},${y}`) ?? {}) }
         if (App.apply.glyph) paint.char = p.char
         if (App.apply.fg) paint.fg = p.fg
         if (App.apply.bg) paint.bg = p.bg
@@ -1628,16 +1628,16 @@ const App = {
             const {x, y} = this.tmouse
             const get = (tx, ty) => {
               if (tx === x && ty === y && App.apply.glyph) return App.paint.char
-              else return App.map.get(`${tx},${ty}`)?.char ?? 0
+              else return App.currentLayer.get(`${tx},${ty}`)?.char ?? 0
             }
             for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
               const char = this.joinedCellAt(x+dx, y+dy, get)
               const applied = {...this.applied(x + dx, y + dy)}
               if (App.apply.glyph) applied.char = char
-              App.map.set(`${x+dx},${y+dy}`, applied)
+              App.currentLayer.set(`${x+dx},${y+dy}`, applied)
             }
           } else {
-            App.map.set(`${x},${y}`, this.applied(x, y))
+            App.currentLayer.set(`${x},${y}`, this.applied(x, y))
           }
         })
         this.lastPaint = { x, y }
@@ -1646,11 +1646,11 @@ const App = {
         App.beginChange()
         for (const [k, v] of App.pasteboard.entries()) {
           const [dx, dy] = k.split(',').map(i => +i)
-          const paint = { ...(App.map.get(`${x+dx},${y+dy}`) ?? {}) }
+          const paint = { ...(App.currentLayer.get(`${x+dx},${y+dy}`) ?? {}) }
           if (App.apply.glyph) paint.char = v.char
           if (App.apply.fg) paint.fg = v.fg
           if (App.apply.bg) paint.bg = v.bg
-          App.map.set(`${x+dx},${y+dy}`, paint)
+          App.currentLayer.set(`${x+dx},${y+dy}`, paint)
         }
         App.finishChange()
       },
@@ -1681,7 +1681,7 @@ const App = {
           if (this.toolStart) {
             this.toolStart = null
           } else {
-            const paint = { char: 0, bg: DefaultBackground, fg: DefaultForeground, ...(App.map.get(`${x},${y}`) ?? {}) }
+            const paint = { char: 0, bg: DefaultBackground, fg: DefaultForeground, ...(App.currentLayer.get(`${x},${y}`) ?? {}) }
             if (App.apply.glyph) App.paint.char = paint.char ?? 0
             if (App.apply.fg) {
               App.paint.fg = paint.fg ?? DefaultForeground
@@ -1715,7 +1715,7 @@ const App = {
               if (App.tool === 'line') {
                 App.beginChange()
                 bresenhamLine(this.toolStart.x, this.toolStart.y, x, y, (x, y) => {
-                  App.map.set(`${x},${y}`, this.applied(x, y))
+                  App.currentLayer.set(`${x},${y}`, this.applied(x, y))
                 })
                 App.finishChange()
               } else if (App.tool === 'rect') {
@@ -1750,13 +1750,13 @@ const App = {
                     }
                   }
                   if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
-                    App.map.set(`${x},${y}`, this.applied(x, y, p))
+                    App.currentLayer.set(`${x},${y}`, this.applied(x, y, p))
                 }
                 App.finishChange()
               } else if (App.tool === 'oval') {
                 App.beginChange()
                 ;(App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(x - this.toolStart.x), Math.abs(y - this.toolStart.y), (x, y) => {
-                  App.map.set(`${x},${y}`, this.applied(x, y))
+                  App.currentLayer.set(`${x},${y}`, this.applied(x, y))
                 })
                 App.finishChange()
               } else if (App.tool === 'copy') {
@@ -1768,9 +1768,9 @@ const App = {
                 const hy = Math.max(this.toolStart.y, y)
                 if (App.toolOptions.copyMode === 'cut') App.beginChange()
                 for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
-                  const a = App.map.get(`${x},${y}`)
+                  const a = App.currentLayer.get(`${x},${y}`)
                   if (a) pasteboard.set(`${x-lx},${y-ly}`, a)
-                  if (App.toolOptions.copyMode === 'cut') App.map.delete(`${x},${y}`)
+                  if (App.toolOptions.copyMode === 'cut') App.currentLayer.delete(`${x},${y}`)
                 }
                 if (App.toolOptions.copyMode === 'cut') App.finishChange()
                 App.pasteboard = pasteboard
@@ -1987,7 +1987,14 @@ async function start() {
   App.init()
   const art = await idb.getItem('art')
   if (art) {
-    App.files = art.files
+    App.files = art.files.map(f => {
+      if (f.data) {
+        f.layers = [f.data]
+        f.selectedLayer = 0
+        delete f.data
+      }
+      return f
+    })
     App.selectedFile = art.selectedFile
   }
   App.fontIdx = 0
