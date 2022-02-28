@@ -167,7 +167,7 @@ function textToolOverlay({x, y, tx, ty}) {
       this.text += e.key
     },
     applied(x, y, c) {
-      const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
+      const paint = { fg: DefaultForeground, bg: DefaultBackground, char: 0, ...(App.map.get(`${x},${y}`) ?? {}) }
       if (App.apply.glyph) paint.char = c
       if (App.apply.fg) paint.fg = App.paint.fg
       if (App.apply.bg) paint.bg = App.paint.bg
@@ -1652,7 +1652,7 @@ const App = {
           if (this.toolStart) {
             this.toolStart = null
           } else {
-            const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
+            const paint = { char: 0, bg: DefaultBackground, fg: DefaultForeground, ...(App.map.get(`${x},${y}`) ?? {}) }
             if (App.apply.glyph) App.paint.char = paint.char ?? 0
             if (App.apply.fg) {
               App.paint.fg = paint.fg ?? DefaultForeground
@@ -1677,6 +1677,7 @@ const App = {
         x = x + this.offsetX
         y = y + this.offsetY
         if (button === 0) {
+          this.lastPaint = null
           if (App.tool === 'cell') {
             App.finishChange()
           }
@@ -1737,9 +1738,10 @@ const App = {
         this.toolStart = null
         this.panStart = null
         this.panMode = false
+        this.lastPaint = null
         App.finishChange() // noop if there's no change happening.
       },
-      mousemove({x, y, buttons}) {
+      mousemove({x, y}) {
         if (this.panStart) {
           const dx = this.panStart.x - x
           const dy = this.panStart.y - y
@@ -1748,7 +1750,7 @@ const App = {
           return
         }
         if (App.tool === 'cell') {
-          if (buttons & 1) this.paint(x + this.offsetX, y + this.offsetY)
+          if (this.lastPaint) this.paint(x + this.offsetX, y + this.offsetY)
         }
       },
     },
@@ -2021,15 +2023,23 @@ async function start() {
       const tw = App.font.tileWidth, th = App.font.tileHeight
       const sx = c % 16
       const sy = (c / 16) | 0
-      if (bg != null) {
+      const isTransparent = ({r, g, b}) => r === 1 && g === 0 && b === 1
+      const realBg =
+        bg && isTransparent(bg)
+        ? fg && !isTransparent(fg)
+          ? BLACK // fg on transparent bg needs to be black to avoid overlaying
+          : null
+        : bg;
+      if (realBg != null) {
         const bgsx = 0xdb % 16
         const bgsy = (0xdb / 16) | 0
         // TODO: not all fonts might have 0xdb be the full square? maybe have
         // to fix this one at some point.
-        spriteBatch.drawRegion(tex, bgsx * tw, bgsy * th, tw, th, dx, dy, tw, th, bg)
+        spriteBatch.drawRegion(tex, bgsx * tw, bgsy * th, tw, th, dx, dy, tw, th, realBg)
       }
       if (fg != null)
-        spriteBatch.drawRegion(tex, sx * tw, sy * th, tw, th, dx, dy, tw, th, fg)
+        if (!(fg.r === 1 && fg.g === 0 && fg.b === 1))
+          spriteBatch.drawRegion(tex, sx * tw, sy * th, tw, th, dx, dy, tw, th, fg)
     }
 
     console.time('draw')
