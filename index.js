@@ -1,7 +1,7 @@
 import { SpriteBatch, Texture, ImageTextureSource, createProgram } from './gl.js'
 import { apcaContrast } from './contrast.js'
 import { bresenhamLine, ellipse, filledEllipse } from './bresenham.js'
-import { BoxDrawing, boxDrawingChar, boxDrawingDoubleChar, isSingleBoxDrawingChar, isDoubleBoxDrawingChar } from './cp437.js'
+import { BoxDrawing, BoxDrawingDouble, boxDrawingChar, boxDrawingDoubleChar, isSingleBoxDrawingChar, isDoubleBoxDrawingChar } from './cp437.js'
 import * as idb from './idb.js'
 import * as xp from './xp.js'
 
@@ -1548,7 +1548,31 @@ const App = {
             const ly = Math.min(this.toolStart.y, this.tmouse.y)
             const hy = Math.max(this.toolStart.y, this.tmouse.y)
             for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
-              const { char = 0, fg, bg } = this.applied(x, y)
+              const p = {...App.paint}
+              if (!App.toolOptions.fillRect) {
+                if (isSingleBoxDrawingChar(p.char)) {
+                  if (y === ly) {
+                    if (x === lx) p.char = BoxDrawing.__RD
+                    else if (x === hx) p.char = BoxDrawing.L__D
+                    else p.char = BoxDrawing.L_R_
+                  } else if (y === hy) {
+                    if (x === lx) p.char = BoxDrawing._UR_
+                    else if (x === hx) p.char = BoxDrawing.LU__
+                    else p.char = BoxDrawing.L_R_
+                  } else p.char = BoxDrawing._U_D
+                } else if (isDoubleBoxDrawingChar(p.char)) {
+                  if (y === ly) {
+                    if (x === lx) p.char = BoxDrawingDouble.__RD
+                    else if (x === hx) p.char = BoxDrawingDouble.L__D
+                    else p.char = BoxDrawingDouble.L_R_
+                  } else if (y === hy) {
+                    if (x === lx) p.char = BoxDrawingDouble._UR_
+                    else if (x === hx) p.char = BoxDrawingDouble.LU__
+                    else p.char = BoxDrawingDouble.L_R_
+                  } else p.char = BoxDrawingDouble._U_D
+                }
+              }
+              const { char = 0, fg, bg } = this.applied(x, y, p)
               if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
                 drawChar(char, x, y, fg, bg)
             }
@@ -1589,11 +1613,12 @@ const App = {
           }
         }
       },
-      applied(x, y) {
+      applied(x, y, p) {
+        if (!p) p = App.paint
         const paint = { ...(App.map.get(`${x},${y}`) ?? {}) }
-        if (App.apply.glyph) paint.char = App.paint.char
-        if (App.apply.fg) paint.fg = App.paint.fg
-        if (App.apply.bg) paint.bg = App.paint.bg
+        if (App.apply.glyph) paint.char = p.char
+        if (App.apply.fg) paint.fg = p.fg
+        if (App.apply.bg) paint.bg = p.bg
         return paint
       },
       paint(x, y) {
@@ -1700,8 +1725,32 @@ const App = {
                 const ly = Math.min(this.toolStart.y, y)
                 const hy = Math.max(this.toolStart.y, y)
                 for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
+                  const p = {...App.paint}
+                  if (!App.toolOptions.fillRect) {
+                    if (isSingleBoxDrawingChar(p.char)) {
+                      if (y === ly) {
+                        if (x === lx) p.char = BoxDrawing.__RD
+                        else if (x === hx) p.char = BoxDrawing.L__D
+                        else p.char = BoxDrawing.L_R_
+                      } else if (y === hy) {
+                        if (x === lx) p.char = BoxDrawing._UR_
+                        else if (x === hx) p.char = BoxDrawing.LU__
+                        else p.char = BoxDrawing.L_R_
+                      } else p.char = BoxDrawing._U_D
+                    } else if (isDoubleBoxDrawingChar(p.char)) {
+                      if (y === ly) {
+                        if (x === lx) p.char = BoxDrawingDouble.__RD
+                        else if (x === hx) p.char = BoxDrawingDouble.L__D
+                        else p.char = BoxDrawingDouble.L_R_
+                      } else if (y === hy) {
+                        if (x === lx) p.char = BoxDrawingDouble._UR_
+                        else if (x === hx) p.char = BoxDrawingDouble.LU__
+                        else p.char = BoxDrawingDouble.L_R_
+                      } else p.char = BoxDrawingDouble._U_D
+                    }
+                  }
                   if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
-                    App.map.set(`${x},${y}`, this.applied(x, y))
+                    App.map.set(`${x},${y}`, this.applied(x, y, p))
                 }
                 App.finishChange()
               } else if (App.tool === 'oval') {
