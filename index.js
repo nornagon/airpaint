@@ -626,7 +626,11 @@ const App = {
     this.save()
   },
   save() {
-    idb.setItem('art', { files: this.files, selectedFile: this.selectedFile })
+    idb.setItem('art', { files: this.files.map(f => {
+      // Don't save pan info
+      const {offsetX, offsetY, ...rest} = f
+      return rest
+    }), selectedFile: this.selectedFile })
   },
   mouse: null,
   get tmouse() {
