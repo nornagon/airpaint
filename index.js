@@ -1019,7 +1019,10 @@ const App = {
           return
         }
         if (App.tool === 'cell') {
-          if (!(buttons & 1)) this.lastPaint = null
+          if (!(buttons & 1)) {
+            App.finishChange() // noop if there's no change happening.
+            this.lastPaint = null
+          }
           if (this.lastPaint) this.paint(x + this.offsetX, y + this.offsetY)
         }
       },
