@@ -651,6 +651,17 @@ const App = {
       return rest
     }), selectedFile: this.selectedFile })
   },
+  mergeDown(li) {
+    if (li <= 0) return
+    this.beginChange({changingLayer: li - 1})
+    const top = this.currentFile.layers[li]
+    const bot = this.currentFile.layers[li - 1]
+    for (const [k, v] of top.data.entries())
+      bot.data.set(k, v)
+    this.currentFile.layers.splice(li, 1)
+    this.currentFile.selectedLayer = Math.min(this.currentFile.selectedLayer, this.currentFile.layers.length - 1)
+    this.finishChange()
+  },
   mouse: null,
   get tmouse() {
     return this.mouse ? { x: (this.mouse.x / App.font.tileWidth)|0, y: (this.mouse.y / App.font.tileHeight)|0 } : null;
@@ -1626,7 +1637,7 @@ const App = {
           title: () => ' Line  ',
           active: () => App.tool === 'line',
           click: () => App.selectTool('line'),
-          keydown: ({code}) => code === 'KeyL' && App.selectTool('line'),
+          keydown: ({code, ctrlKey, metaKey}) => code === 'KeyL' && !ctrlKey && !metaKey && App.selectTool('line'),
         }),
         button({
           x: 10,
@@ -1787,6 +1798,9 @@ const App = {
             App.currentFile.selectedLayer = App.currentFile.layers.length - 1
             App.finishChange()
           },
+          keydown(e) {
+            if (e.code === 'KeyL' && (e.ctrlKey || e.metaKey)) this.click()
+          },
         }),
         {
           x: 1,
@@ -1816,7 +1830,7 @@ const App = {
               if (numLayers > 1) ctx.drawText('X', 15, y, usable, mx === 15 ? highlight : null)
             })
           },
-          mousedown({x, y, button}) {
+          mousedown({x, y, button, shiftKey}) {
             if (button === 0) {
               const numLayers = App.currentFile.layers.length
               const li = numLayers - y - 1
@@ -1845,20 +1859,28 @@ const App = {
               }
               if (x === 11) { // Move down
                 if (numLayers > 1 && li > 0) {
-                  App.beginChange({layerDataUnchanged: true, changingLayer: -1})
-                  const tmp = App.currentFile.layers[li - 1]
-                  App.currentFile.layers[li - 1] = App.currentFile.layers[li]
-                  App.currentFile.layers[li] = tmp
-                  App.finishChange()
+                  if (shiftKey) {
+                    App.mergeDown(li)
+                  } else {
+                    App.beginChange({layerDataUnchanged: true, changingLayer: -1})
+                    const tmp = App.currentFile.layers[li - 1]
+                    App.currentFile.layers[li - 1] = App.currentFile.layers[li]
+                    App.currentFile.layers[li] = tmp
+                    App.finishChange()
+                  }
                 }
               }
               if (x === 12) { // Move up
                 if (numLayers > 1 && li < numLayers - 1) {
-                  App.beginChange({layerDataUnchanged: true, changingLayer: -1})
-                  const tmp = App.currentFile.layers[li + 1]
-                  App.currentFile.layers[li + 1] = App.currentFile.layers[li]
-                  App.currentFile.layers[li] = tmp
-                  App.finishChange()
+                  if (shiftKey) {
+                    App.mergeDown(li + 1)
+                  } else {
+                    App.beginChange({layerDataUnchanged: true, changingLayer: -1})
+                    const tmp = App.currentFile.layers[li + 1]
+                    App.currentFile.layers[li + 1] = App.currentFile.layers[li]
+                    App.currentFile.layers[li] = tmp
+                    App.finishChange()
+                  }
                 }
               }
               if (x === 13) { // Lock
@@ -1878,7 +1900,26 @@ const App = {
                 App.finishChange()
               }
             }
-          }
+          },
+          keydown(e) {
+            const m = /^Digit([0-9])$/.exec(e.code)
+            if (m) {
+              const n = +m[1]
+              const li = n === 0 ? 9 : n - 1
+              if (li < App.currentFile.layers.length) {
+                if (e.shiftKey) {
+                  App.beginChange({layerDataUnchanged: true, changingLayer: li})
+                  App.currentFile.layers[li].locked = !App.currentFile.layers[li].locked
+                  App.finishChange()
+                } else {
+                  App.currentFile.selectedLayer = li
+                }
+              }
+            }
+            if (e.code === 'KeyM' && e.ctrlKey && e.shiftKey) {
+              App.mergeDown(App.currentFile.selectedLayer)
+            }
+          },
         },
       ],
     },
@@ -2289,6 +2330,9 @@ async function start() {
       y: e.clientY,
       button: e.button,
       buttons: e.buttons,
+      shiftKey: e.shiftKey,
+      ctrlKey: e.ctrlKey,
+      metaKey: e.metaKey,
       stopPropagation() {
         this.propagationStopped = true
       }
