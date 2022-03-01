@@ -85,7 +85,7 @@ function button({title, active, click, ...rest}) {
   })
 }
 
-function numberButton({value, setValue, width, pattern = /^[0-9]*$/, ...rest}) {
+function numberButton({value, setValue, fg, width, align = 'right', pattern = /^[0-9]*$/, ...rest}) {
   return button({
     height: 1,
     width,
@@ -94,11 +94,14 @@ function numberButton({value, setValue, width, pattern = /^[0-9]*$/, ...rest}) {
       this.captureKeys = true
       this.text = ''
     },
+    stopEditing() {
+      this.captureKeys = false
+    },
     draw(ctx) {
       if (this.captureKeys)  {
-        ctx.drawText(this.text.padStart(this.width, ' '), 0, 0,
-          App.skin.buttons.usable, App.skin.buttons.highlight)
-        ctx.drawText('_', this.width - 1, 0, WHITE)
+        ctx.drawText(align === 'right' ? this.text.padStart(this.width, ' ') : this.text.padEnd(this.width, ' '), 0, 0,
+          fg ?? App.skin.buttons.usable, App.skin.buttons.highlight)
+        ctx.drawText('_', align === 'right' ? this.width - 1 : Math.min(this.text.length, this.width - 1), 0, WHITE)
       } else
         ctx.drawText(
           value().padStart(this.width, ' '),
@@ -111,7 +114,7 @@ function numberButton({value, setValue, width, pattern = /^[0-9]*$/, ...rest}) {
         try {
           setValue(this.text)
         } finally {
-          this.captureKeys = false
+          this.stopEditing()
         }
       }
       if (this.text.length < this.width && this.pattern.test(this.text + e.key))
@@ -120,7 +123,7 @@ function numberButton({value, setValue, width, pattern = /^[0-9]*$/, ...rest}) {
     keydown(e) {
       if (!this.captureKeys) return
       if (e.code === 'Backspace') this.text = this.text.substring(0, this.text.length - 1)
-      if (e.code === 'Escape') this.captureKeys = false
+      if (e.code === 'Escape') this.stopEditing()
     },
     ...rest
   })
@@ -233,7 +236,7 @@ function newFile() {
   return {
     name: 'unnamed',
     layers: [
-      { data: new Map },
+      { data: new Map, name: 'Layer 1' },
     ],
     selectedLayer: 0,
     undoStack: [],
@@ -1775,7 +1778,12 @@ const App = {
           },
           click() {
             App.beginChange({changingLayer: -1})
-            App.currentFile.layers.push({data: new Map})
+            const nextLayerName = () => {
+              let n = 1
+              while (App.currentFile.layers.some(l => l.name === `Layer ${n}`)) n++
+              return `Layer ${n}`
+            }
+            App.currentFile.layers.push({data: new Map, name: nextLayerName()})
             App.currentFile.selectedLayer = App.currentFile.layers.length - 1
             App.finishChange()
           },
@@ -1792,7 +1800,11 @@ const App = {
             App.currentFile.layers.forEach((l, i) => {
               const y = numLayers - i - 1
               const mx = this.tmouse?.y === y ? this.tmouse.x : null
-              ctx.drawText(i + 1, 0, y, i === App.currentFile.selectedLayer ? active : inactive)
+              ctx.drawText(
+                (l.name ?? (i + 1).toString()).padEnd(10, ' '),
+                0, y,
+                i === App.currentFile.selectedLayer ? active : inactive,
+                mx && mx < 10 ? highlight : null)
               if (numLayers > 1) {
                 if (i < numLayers - 1)
                   ctx.drawChar(0x18, 12, y, usable, mx === 12 ? highlight : null)
@@ -1809,7 +1821,27 @@ const App = {
               const numLayers = App.currentFile.layers.length
               const li = numLayers - y - 1
               if (x < 11) {
-                App.currentFile.selectedLayer = li
+                if (App.currentFile.selectedLayer === li)
+                  App.ui.push(numberButton({
+                    x: this.x,
+                    y: this.y + y,
+                    width: 10,
+                    fg: App.skin.buttons.active,
+                    align: 'left',
+                    text: '',
+                    captureKeys: true,
+                    pattern: /.*/,
+                    stopEditing() {
+                      App.ui.splice(App.ui.lastIndexOf(this), 1)
+                    },
+                    setValue(name) {
+                      App.beginChange({layerDataUnchanged: true, changingLayer: li})
+                      App.currentFile.layers[li].name = name
+                      App.finishChange()
+                    }
+                  }))
+                else
+                  App.currentFile.selectedLayer = li
               }
               if (x === 11) { // Move down
                 if (numLayers > 1 && li > 0) {
