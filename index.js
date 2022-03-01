@@ -34,6 +34,42 @@ function parseFontConfig(text) {
   }
   return fonts
 }
+  /*  def reachableFrom[T](from: T, links: T => Seq[T]): Set[T] = {
+    val q = mutable.Queue.empty[T]
+    val visited = mutable.Set.empty[T]
+    visited.add(from)
+    q.enqueue(from)
+    while (q.nonEmpty) {
+      val e = q.dequeue()
+      val ls = links(e)
+      for (n <- ls) {
+        if (!visited(n)) {
+          visited.add(n)
+          q.enqueue(n)
+        }
+      }
+    }
+    visited.toSet
+  }
+  */
+
+function* floodFill(origin, neighbors) {
+  const q = []
+  const visited = new Set
+  visited.add(`${origin.x},${origin.y}`)
+  yield origin
+  q.push(origin)
+  while (q.length) {
+    const e = q.shift()
+    for (const n of neighbors(e)) {
+      if (!visited.has(`${n.x},${n.y}`)) {
+        visited.add(`${n.x},${n.y}`)
+        yield n
+        q.push(n)
+      }
+    }
+  }
+}
 
 const WHITE = {r: 1, g: 1, b: 1}
 const BLACK = {r: 0, g: 0, b: 0}
@@ -816,6 +852,25 @@ const App = {
             f(char, x, y, fg, bg)
           })
         }
+        if (App.tool === 'fill') {
+          const layer = App.currentLayer
+          const adjacencies = App.toolOptions.fillEightNeighborhood
+            ? [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]]
+            : [[-1,0], [0,-1], [1,0], [0,1]]
+          const seeking = { char: 0, bg: DefaultBackground, fg: DefaultForeground, ...(layer.data.get(this.tmouse.x, this.tmouse.y) ?? {}) }
+          for (const {x, y} of floodFill(this.tmouse, function* ({x, y}) {
+            for (const [dx, dy] of adjacencies) {
+              const tx = x+dx, ty = y+dy
+              const test = layer.data.get(tx, ty)
+              if (test && test.char === seeking.char && test.bg.r === seeking.bg.r && test.bg.g === seeking.bg.g && test.bg.b === seeking.bg.b && test.fg.r === seeking.fg.r && test.fg.g === seeking.fg.g && test.fg.b === seeking.fg.b) {
+                yield {x: tx, y: ty}
+              }
+            }
+          })) {
+            const { char = 0, fg, bg } = this.applied(x, y)
+            f(char, x, y, fg, bg)
+          }
+        }
         if (App.tool === 'paste' && App.pasteboard) {
           for (const [[x, y], v] of App.pasteboard.entries()) {
             const paint = { ...(App.currentLayer.data.get(x + this.tmouse.x,y + this.tmouse.y) ?? {}) }
@@ -916,7 +971,7 @@ const App = {
             this.toolStart = { x, y }
           } else if (App.tool === 'text') {
             App.ui.push(textToolOverlay({x: this.x + ox, y: this.y + oy, tx: x, ty: y}))
-          } else if (App.tool === 'paste') {
+          } else if (App.tool === 'paste' || App.tool === 'fill') {
             App.beginChange()
             this.currentChange((char, x, y, fg, bg) => {
               App.currentLayer.data.set(x,y, {char, fg, bg})
