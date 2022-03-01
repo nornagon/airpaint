@@ -660,7 +660,6 @@ const App = {
   get tmouse() {
     return this.mouse ? { x: (this.mouse.x / App.font.tileWidth)|0, y: (this.mouse.y / App.font.tileHeight)|0 } : null;
   },
-  mouseButtons: 0,
   paint: {
     char: 0,
     fg: DefaultForeground,
@@ -2318,7 +2317,6 @@ async function start() {
 
   canvas.addEventListener('mousedown', (e) => {
     App.mouse = { x: e.clientX, y: e.clientY }
-    App.mouseButtons = e.buttons
     App.mousedown({
       x: e.clientX,
       y: e.clientY,
@@ -2334,7 +2332,6 @@ async function start() {
     dirty()
   })
   window.addEventListener('mouseup', (e) => {
-    App.mouseButtons = e.buttons
     App.mouseup({
       x: e.clientX,
       y: e.clientY,
@@ -2348,7 +2345,6 @@ async function start() {
   })
   canvas.addEventListener('contextmenu', (e) => e.preventDefault())
   window.addEventListener('blur', () => {
-    App.mouseButtons = 0
     App.mouse = null
     App.blur()
     dirty()
