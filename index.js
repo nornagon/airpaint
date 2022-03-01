@@ -3,6 +3,7 @@ import { SpriteBatch, Texture, ImageTextureSource, createProgram } from './gl.js
 import { apcaContrast } from './contrast.js'
 import { bresenhamLine, ellipse, filledEllipse } from './bresenham.js'
 import { BoxDrawing, BoxDrawingDouble, boxDrawingChar, boxDrawingDoubleChar, isSingleBoxDrawingChar, isDoubleBoxDrawingChar } from './cp437.js'
+import defaultPalette from './default-palette.js'
 import * as idb from './idb.js'
 import * as xp from './xp.js'
 
@@ -36,19 +37,6 @@ function parseFontConfig(text) {
 
 const WHITE = {r: 1, g: 1, b: 1}
 const BLACK = {r: 0, g: 0, b: 0}
-const palette = parseREXPalette(await fetch('Palette.txt').then(x => x.text()))
-window.palette = palette
-
-function parseREXPalette(txt) {
-  const colors = []
-  const re = /\{\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\}/g
-  let m
-  while (m = re.exec(txt)) {
-    const [, r, g, b] = m
-    colors.push({r: +r/255, g: +g/255, b: +b/255})
-  }
-  return colors
-}
 
 const UiInitialized = Symbol('UiInitialized')
 function initUi(el) {
@@ -596,6 +584,7 @@ const App = {
     newFile()
   ],
   selectedFile: 0,
+  palette: defaultPalette,
   get currentFile() {
     return this.files[this.selectedFile]
   },
@@ -943,13 +932,13 @@ const App = {
             if (App.apply.glyph) App.paint.char = paint.char ?? 0
             if (App.apply.fg) {
               App.paint.fg = paint.fg ?? DefaultForeground
-              const idx = palette.findIndex(c => c.r === App.paint.fg.r && c.g === App.paint.fg.g && c.b === App.paint.fg.b)
+              const idx = App.palette.findIndex(c => c.r === App.paint.fg.r && c.g === App.paint.fg.g && c.b === App.paint.fg.b)
               if (idx >= 0) App.selectedPalette.fg = idx
               else App.selectedPalette.fg = null
             }
             if (App.apply.bg) {
               App.paint.bg = paint.bg ?? DefaultBackground
-              const idx = palette.findIndex(c => c.r === App.paint.bg.r && c.g === App.paint.bg.g && c.b === App.paint.bg.b)
+              const idx = App.palette.findIndex(c => c.r === App.paint.bg.r && c.g === App.paint.bg.g && c.b === App.paint.bg.b)
               if (idx >= 0) App.selectedPalette.bg = idx
               else App.selectedPalette.bg = null
             }
@@ -1210,7 +1199,7 @@ const App = {
           draw(ctx) {
             for (let y = 0; y < 12; y++) for (let x = 0; x < 16; x++) {
               const i = y * 16 + x
-              const color = palette[i] ?? {r: 0, g: 0, b: 0}
+              const color = App.palette[i] ?? {r: 0, g: 0, b: 0}
               ctx.drawChar(0, x, y, null, color)
               if (i === App.selectedPalette.fg) {
                 const cw = Math.abs(apcaContrast(WHITE, color))
@@ -1230,22 +1219,22 @@ const App = {
             const i = y * 16 + x
             if (button === 0) {
               if (App.selectedPalette.fg === i) {
-                App.ui.push(colorChooser(palette[i], (c) => {
-                  App.paint.fg = palette[i] = c
+                App.ui.push(colorChooser(App.palette[i], (c) => {
+                  App.paint.fg = App.palette[i] = c
                 }))
                 this.mouseWentDownInPalette = false
               } else {
-                App.paint.fg = palette[i]
+                App.paint.fg = App.palette[i]
                 App.selectedPalette.fg = i
               }
             } else if (button === 2) {
               if (App.selectedPalette.bg === i) {
-                App.ui.push(colorChooser(palette[i], (c) => {
-                  App.paint.bg = palette[i] = c
+                App.ui.push(colorChooser(App.palette[i], (c) => {
+                  App.paint.bg = App.palette[i] = c
                 }))
                 this.mouseWentDownInPalette = false
               } else {
-                App.paint.bg = palette[i]
+                App.paint.bg = App.palette[i]
                 App.selectedPalette.bg = i
               }
             }
@@ -1253,11 +1242,11 @@ const App = {
           mousemove({x, y, buttons}) {
             if (!this.mouseWentDownInPalette) return
             if (buttons & 1) {
-              App.paint.fg = palette[y * 16 + x]
+              App.paint.fg = App.palette[y * 16 + x]
               App.selectedPalette.fg = y * 16 + x
             }
             if (buttons & 2) {
-              App.paint.bg = palette[y * 16 + x]
+              App.paint.bg = App.palette[y * 16 + x]
               App.selectedPalette.bg = y * 16 + x
             }
           },

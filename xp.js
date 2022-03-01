@@ -127,3 +127,14 @@ class Encoder {
   }
 }
 
+export function parseREXPalette(txt) {
+  const colors = []
+  const re = /\{\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\}/g
+  let m
+  while (m = re.exec(txt)) {
+    const [, r, g, b] = m
+    colors.push({r: +r/255, g: +g/255, b: +b/255})
+  }
+  return colors
+}
+
