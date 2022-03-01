@@ -1,3 +1,4 @@
+import { CoordinateMap } from './coordinate-map.js'
 import { SpriteBatch, Texture, ImageTextureSource, createProgram } from './gl.js'
 import { apcaContrast } from './contrast.js'
 import { bresenhamLine, ellipse, filledEllipse } from './bresenham.js'
@@ -165,7 +166,7 @@ function textToolOverlay({x, y, tx, ty}) {
         const lines = this.text.split('\n')
         lines.forEach((line, y) => {
           for (let i = 0; i < line.length; i++) {
-            App.currentLayer.data.set(`${tx + i},${ty + y}`, this.applied(tx + i, ty + y, line.charCodeAt(i)))
+            App.currentLayer.data.set(tx + i,ty + y, this.applied(tx + i, ty + y, line.charCodeAt(i)))
           }
         })
         App.finishChange()
@@ -175,7 +176,7 @@ function textToolOverlay({x, y, tx, ty}) {
       this.text += e.key
     },
     applied(x, y, c) {
-      const paint = { fg: DefaultForeground, bg: DefaultBackground, char: 0, ...(App.currentLayer.data.get(`${x},${y}`) ?? {}) }
+      const paint = { fg: DefaultForeground, bg: DefaultBackground, char: 0, ...(App.currentLayer.data.get(x,y) ?? {}) }
       if (App.apply.glyph) paint.char = c
       if (App.apply.fg) paint.fg = App.paint.fg
       if (App.apply.bg) paint.bg = App.paint.bg
@@ -237,7 +238,7 @@ function newFile() {
   return {
     name: 'unnamed',
     layers: [
-      { data: new Map, name: 'Layer 1' },
+      { data: new CoordinateMap, name: 'Layer 1' },
     ],
     selectedLayer: 0,
     undoStack: [],
@@ -620,7 +621,7 @@ const App = {
     this.undoStack.push(this.currentFile.layers)
     this.currentFile.layers = this.currentFile.layers.map((x, i) => {
       if (i === changingLayer && !layerDataUnchanged) {
-        return {...x, data: new Map(x.data)}
+        return {...x, data: new CoordinateMap(x.data)}
       } else {
         return {...x}
       }
@@ -651,8 +652,8 @@ const App = {
   save() {
     idb.setItem('art', { files: this.files.map(f => {
       // Don't save pan info
-      const {offsetX, offsetY, ...rest} = f
-      return rest
+      const {offsetX, offsetY, layers, ...rest} = f
+      return {...rest, layers: layers.map(l => ({...l, data: l.data._map}))}
     }), selectedFile: this.selectedFile })
   },
   mergeDown(li) {
@@ -660,8 +661,8 @@ const App = {
     this.beginChange({changingLayer: li - 1})
     const top = this.currentFile.layers[li]
     const bot = this.currentFile.layers[li - 1]
-    for (const [k, v] of top.data.entries())
-      bot.data.set(k, v)
+    for (const [[x, y], v] of top.data.entries())
+      bot.data.set(x, y, v)
     this.currentFile.layers.splice(li, 1)
     this.currentFile.selectedLayer = Math.min(this.currentFile.selectedLayer, this.currentFile.layers.length - 1)
     this.finishChange()
@@ -768,7 +769,7 @@ const App = {
             const {x, y} = this.tmouse
             const get = (tx, ty) => {
               if (tx === x && ty === y && App.apply.glyph) return App.paint.char
-              else return App.currentLayer.data.get(`${tx},${ty}`)?.char ?? 0
+              else return App.currentLayer.data.get(tx,ty)?.char ?? 0
             }
             const {fg, bg, char: appliedChar} = this.applied(x, y)
             for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
@@ -828,9 +829,8 @@ const App = {
           })
         }
         if (App.tool === 'paste' && App.pasteboard) {
-          for (const [k, v] of App.pasteboard.entries()) {
-            const [x, y] = k.split(',').map(i => +i)
-            const paint = { ...(App.currentLayer.data.get(`${x + this.tmouse.x},${y + this.tmouse.y}`) ?? {}) }
+          for (const [[x, y], v] of App.pasteboard.entries()) {
+            const paint = { ...(App.currentLayer.data.get(x + this.tmouse.x,y + this.tmouse.y) ?? {}) }
             if (App.apply.glyph) paint.char = v.char
             if (App.apply.fg) paint.fg = v.fg
             if (App.apply.bg) paint.bg = v.bg
@@ -839,14 +839,14 @@ const App = {
         }
       },
       draw(ctx) {
+        const {offsetX, offsetY} = this
         const drawChar = (c, x, y, fg, bg) => {
-          if (x - this.offsetX < 0 || y - this.offsetY < 0) return
-          ctx.drawChar(c, x - this.offsetX, y - this.offsetY, fg, bg)
+          if (x - offsetX < 0 || y - offsetY < 0) return
+          ctx.drawChar(c, x - offsetX, y - offsetY, fg, bg)
         }
         App.currentFile.layers.forEach((layer, i) => {
           if (layer.hidden) return
-          for (const [k, v] of layer.data.entries()) {
-            const [x, y] = k.split(',')
+          for (const [[x, y], v] of layer.data.entries()) {
             const { char, fg, bg } = v
             drawChar(char ?? 0x20, +x, +y, fg, bg)
           }
@@ -881,7 +881,7 @@ const App = {
       },
       applied(x, y, p) {
         if (!p) p = App.paint
-        const paint = { ...(App.currentLayer.data.get(`${x},${y}`) ?? {}) }
+        const paint = { ...(App.currentLayer.data.get(x,y) ?? {}) }
         if (App.apply.glyph) paint.char = p.char
         if (App.apply.fg) paint.fg = p.fg
         if (App.apply.bg) paint.bg = p.bg
@@ -894,16 +894,16 @@ const App = {
             const {x, y} = this.tmouse
             const get = (tx, ty) => {
               if (tx === x && ty === y && App.apply.glyph) return App.paint.char
-              else return App.currentLayer.data.get(`${tx},${ty}`)?.char ?? 0
+              else return App.currentLayer.data.get(tx,ty)?.char ?? 0
             }
             for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
               const char = this.joinedCellAt(x+dx, y+dy, get)
               const applied = {...this.applied(x + dx, y + dy)}
               if (App.apply.glyph) applied.char = char
-              App.currentLayer.data.set(`${x+dx},${y+dy}`, applied)
+              App.currentLayer.data.set(x+dx,y+dy, applied)
             }
           } else {
-            App.currentLayer.data.set(`${x},${y}`, this.applied(x, y))
+            App.currentLayer.data.set(x,y, this.applied(x, y))
           }
         })
         this.lastPaint = { x, y }
@@ -931,7 +931,7 @@ const App = {
           } else if (App.tool === 'paste') {
             App.beginChange()
             this.currentChange((char, x, y, fg, bg) => {
-              App.currentLayer.data.set(`${x},${y}`, {char, fg, bg})
+              App.currentLayer.data.set(x,y, {char, fg, bg})
             })
             App.finishChange()
           }
@@ -939,7 +939,7 @@ const App = {
           if (this.toolStart) {
             this.toolStart = null
           } else {
-            const paint = { char: 0, bg: DefaultBackground, fg: DefaultForeground, ...(App.currentLayer.data.get(`${x},${y}`) ?? {}) }
+            const paint = { char: 0, bg: DefaultBackground, fg: DefaultForeground, ...(App.currentLayer.data.get(x,y) ?? {}) }
             if (App.apply.glyph) App.paint.char = paint.char ?? 0
             if (App.apply.fg) {
               App.paint.fg = paint.fg ?? DefaultForeground
@@ -971,23 +971,23 @@ const App = {
           if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval' || App.tool === 'copy') {
             if (this.tmouse && this.toolStart) {
               if (App.tool === 'copy') {
-                const pasteboard = new Map
+                const pasteboard = new CoordinateMap
                 const lx = Math.min(this.toolStart.x, x)
                 const hx = Math.max(this.toolStart.x, x)
                 const ly = Math.min(this.toolStart.y, y)
                 const hy = Math.max(this.toolStart.y, y)
                 if (App.toolOptions.copyMode === 'cut') App.beginChange()
                 for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
-                  const a = App.currentLayer.data.get(`${x},${y}`)
-                  if (a) pasteboard.set(`${x-lx},${y-ly}`, a)
-                  if (App.toolOptions.copyMode === 'cut') App.currentLayer.data.delete(`${x},${y}`)
+                  const a = App.currentLayer.data.get(x,y)
+                  if (a) pasteboard.set(x-lx, y-ly, a)
+                  if (App.toolOptions.copyMode === 'cut') App.currentLayer.data.delete(x, y)
                 }
                 if (App.toolOptions.copyMode === 'cut') App.finishChange()
                 App.pasteboard = pasteboard
               } else {
                 App.beginChange()
                 this.currentChange((char, x, y, fg, bg) => {
-                  App.currentLayer.data.set(`${x},${y}`, {char, fg, bg})
+                  App.currentLayer.data.set(x,y, {char, fg, bg})
                 })
                 App.finishChange()
               }
@@ -1012,6 +1012,10 @@ const App = {
       },
       mousemove({x, y, buttons}) {
         if (this.panStart) {
+          if (!(buttons & 1)) {
+            this.panStart = null
+            return
+          }
           const dx = this.panStart.x - x
           const dy = this.panStart.y - y
           this.offsetX = this.panStart.offsetX + dx
@@ -1703,7 +1707,7 @@ const App = {
             ctx.drawText(`Back`, 1, 2, {r: 0.5,g:0.5,b:0.5})
             if (canvas.tmouse) {
               const {x, y} = canvas.tmouse
-              const { fg, bg } = App.currentLayer.data.get(`${x},${y}`) ?? {}
+              const { fg, bg } = App.currentLayer.data.get(x,y) ?? {}
               if (fg) {
                 const {r, g, b} = fg
                 ctx.drawText(`${[r,g,b].map(c => ((c*255)|0).toString().padStart(3, ' ')).join(' ')}`, 6, 1, App.skin.headers)
@@ -1761,7 +1765,7 @@ const App = {
               while (App.currentFile.layers.some(l => l.name === `Layer ${n}`)) n++
               return `Layer ${n}`
             }
-            App.currentFile.layers.push({data: new Map, name: nextLayerName()})
+            App.currentFile.layers.push({data: new CoordinateMap, name: nextLayerName()})
             App.currentFile.selectedLayer = App.currentFile.layers.length - 1
             App.finishChange()
           },
@@ -2162,14 +2166,22 @@ async function start() {
   App.init()
   const art = await idb.getItem('art')
   if (art) {
-    App.files = art.files.map(f => {
-      f.layers = f.layers.map(l => {
-        if (l instanceof Map)
-          return {data: l}
-        return l
-      })
-      return f
-    })
+    App.files = art.files.map(f => (
+      {
+        ...f,
+        layers: f.layers.map(l => {
+          if (typeof [...l.data.keys()][0] === 'string') {
+            const data = new CoordinateMap()
+            for (const [k, v] of l.data.entries()) {
+              const [x, y] = k.split(',')
+              data.set(+x, +y, v)
+            }
+            return {...l, data}
+          }
+          return {...l, data: new CoordinateMap({_map: l.data})}
+        })
+      }
+    ))
     App.selectedFile = art.selectedFile
   }
   App.fontIdx = 0
@@ -2256,6 +2268,7 @@ async function start() {
     function drawChar(img, c, dx, dy, fg, bg) {
       const tex = getTexture(img)
       const tw = App.font.tileWidth, th = App.font.tileHeight
+      if (dx < -tw || dy < -th || dx >= canvas.width || dy >= canvas.height) return
       const sx = c % 16
       const sy = (c / 16) | 0
       const isTransparent = ({r, g, b}) => r === 1 && g === 0 && b === 1
@@ -2277,7 +2290,7 @@ async function start() {
           spriteBatch.drawRegion(tex, sx * tw, sy * th, tw, th, dx, dy, tw, th, fg)
     }
 
-    //console.time('draw')
+    console.time('draw')
     spriteBatch.begin()
     App.draw({
       width: (canvas.width / App.font.tileWidth) | 0,
@@ -2296,7 +2309,7 @@ async function start() {
       }
     })
     spriteBatch.end()
-    //console.timeEnd('draw')
+    console.timeEnd('draw')
   }
 
   window.addEventListener('mousemove', (e) => {

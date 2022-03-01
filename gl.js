@@ -247,7 +247,7 @@ export class SpriteBatch {
   }
 
   checkFlush(tex) {
-    if (!(this.texture === tex) || this.idx >= this.maxIndex) {
+    if (this.texture !== tex || this.idx >= this.maxIndex) {
       this.flush()
       this.texture = tex
     }
@@ -258,7 +258,6 @@ export class SpriteBatch {
       this.data.flip()
       this.render()
       this.idx = 0
-      //this.data.buffer.clear()
     }
   }
 

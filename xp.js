@@ -1,3 +1,4 @@
+import { CoordinateMap } from './coordinate-map.js'
 export async function read(blob) {
   const inflated = await decompressBlob(blob)
   const buf = await inflated.arrayBuffer()
@@ -10,7 +11,7 @@ export async function read(blob) {
     const width = d.getUint32(offset, true)
     const height = d.getUint32(offset + 4, true)
     offset += 8
-    const data = new Map
+    const data = new CoordinateMap
     const layer = {width, height, data}
     for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
       const char = d.getUint32(offset, true)
@@ -21,7 +22,7 @@ export async function read(blob) {
       const br = d.getUint8(offset++, true)
       const bg = d.getUint8(offset++, true)
       const bb = d.getUint8(offset++, true)
-      data.set(`${x},${y}`, {
+      data.set(x, y, {
         char,
         fg: {r: fr/255, g: fg/255, b: fb/255},
         bg: {r: br/255, g: bg/255, b: bb/255},
@@ -51,15 +52,14 @@ export function write({version, layers}) {
   for (const layer of layers) {
     // TODO: allow negative x/y and offset?
     let width = 0, height = 0
-    for (const k of layer.data.keys()) {
-      const [x, y] = k.split(',').map(x => +x)
+    for (const [x, y] of layer.data.keys()) {
       if (x + 1 > width) width = x + 1
       if (y + 1 > height) height = y + 1
     }
     e.appendUint32(width)
     e.appendUint32(height)
     for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
-      let { char, fg, bg } = layer.data.get(`${x},${y}`) ?? {}
+      let { char, fg, bg } = layer.data.get(x, y) ?? {}
       if (char == null) char = 0
       if (fg == null) fg = {r: 0, g: 0, b: 0}
       if (bg == null) bg = {r: 0, g: 0, b: 0}
