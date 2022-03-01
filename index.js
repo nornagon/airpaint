@@ -399,7 +399,7 @@ function colorChooser(initial, choose) {
             ctx.drawText('  ', 0, y, null, { r, g, b })
             ctx.drawText('  ', 2, y, null, BLACK)
           }
-          const selectedH = (h / 360 * (this.height - 1)) | 0
+          const selectedH = Math.min(this.height - 1, (h / 360 * (this.height)) | 0)
           ctx.drawText('-  -', -1, selectedH, WHITE)
         },
         mousedown({y, button}) {
