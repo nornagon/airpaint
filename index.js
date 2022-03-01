@@ -1055,7 +1055,7 @@ const App = {
         this.lastPaint = null
         App.finishChange() // noop if there's no change happening.
       },
-      mousemove({x, y}) {
+      mousemove({x, y, buttons}) {
         if (this.panStart) {
           const dx = this.panStart.x - x
           const dy = this.panStart.y - y
@@ -1064,6 +1064,7 @@ const App = {
           return
         }
         if (App.tool === 'cell') {
+          if (!(buttons & 1)) this.lastPaint = null
           if (this.lastPaint) this.paint(x + this.offsetX, y + this.offsetY)
         }
       },
