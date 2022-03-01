@@ -55,9 +55,11 @@ function initUi(el) {
   Object.setPrototypeOf(el, {
     get tmouse() {
       const atm = App.tmouse
-      if (!atm || !this.width || !this.height || atm.x < this._ox || atm.y < this._oy || atm.x >= this._ox + this.width || atm.y >= this._oy + this.height)
+      const ox = this._px + this.x
+      const oy = this._py + this.y
+      if (!atm || !this.width || !this.height || atm.x < ox || atm.y < oy || atm.x >= ox + this.width || atm.y >= oy + this.height)
         return null
-      return {x: atm.x - this._ox, y: atm.y - this._oy}
+      return {x: atm.x - ox, y: atm.y - oy}
     },
     [UiInitialized]: true
   })
@@ -209,8 +211,7 @@ function renameDialog(file) {
       ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
       for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
         ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
-      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
-        ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
+      ctx.fill(1, 1, width, height, App.skin.background)
 
       ctx.drawText(this.text + '_', 1, 1, WHITE)
     },
@@ -1104,6 +1105,11 @@ const App = {
     {
       name: 'sidebar/paint',
       display() { return App.sidebar === 'paint' },
+      x: 0,
+      y: 0,
+      draw(ctx) {
+        ctx.fill(this.x, this.y + 1, 18, ctx.height, App.skin.background)
+      },
       children: [
         // -- Font --
         {
@@ -2067,17 +2073,17 @@ const App = {
     this.laters.forEach(f => f())
     this.laters.length = 0
   },
-  draw({width, height, drawChar}) {
+  draw({width, height, drawChar, fill}) {
     for (const [el, ancestors] of this.eachUi()) {
       if (el.draw) {
-        const ox = el.x + ancestors.reduce((m, o) => m + (o.x ?? 0), 0)
-        const oy = el.y + ancestors.reduce((m, o) => m + (o.y ?? 0), 0)
-        el._ox = ox
-        el._oy = oy
+        const px = ancestors.reduce((m, o) => m + (o.x ?? 0), 0)
+        const py = ancestors.reduce((m, o) => m + (o.y ?? 0), 0)
+        el._px = px
+        el._py = py
         el.draw({
           width, height,
           drawChar(c, x, y, fg, bg) {
-            drawChar(App.font.image, c, x + ox, y + oy, fg, bg)
+            drawChar(App.font.image, c, x + px + el.x, y + py + el.y, fg, bg)
           },
           drawText(str, x, y, fg, bg) {
             str = '' + str
@@ -2099,6 +2105,9 @@ const App = {
             this.drawChar(BoxDrawing.L__D, x + width - 1, y, fg, bg)
             this.drawChar(BoxDrawing.LU__, x + width - 1, y + height - 1, fg, bg)
           },
+          fill(x, y, width, height, color) {
+            fill(x + px + el.x, y + py + el.y, width, height, color)
+          }
         })
       }
     }
@@ -2318,6 +2327,15 @@ async function start() {
       height: (canvas.height / App.font.tileHeight) | 0,
       drawChar(img, c, tx, ty, fg, bg) {
         drawChar(img, c, tx * App.font.tileWidth, ty * App.font.tileHeight, fg, bg)
+      },
+      fill(tx, ty, w, h, color) {
+        const tex = getTexture(App.font.image)
+        const tw = App.font.tileWidth, th = App.font.tileHeight
+        const bgsx = 0xdb % 16
+        const bgsy = (0xdb / 16) | 0
+        // TODO: not all fonts might have 0xdb be the full square? maybe have
+        // to fix this one at some point.
+        spriteBatch.drawRegion(tex, bgsx * tw, bgsy * th, tw, th, tx * tw, ty * tw, tw * w, th * h, color)
       }
     })
     spriteBatch.end()
