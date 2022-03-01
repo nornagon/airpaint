@@ -67,10 +67,13 @@ function initUi(el) {
 function button({title, active, click, ...rest}) {
   return initUi({
     height: 1,
-    draw(ctx) {
+    drawButton(ctx) {
       const fg = active ? active() ? App.skin.buttons.active : App.skin.buttons.inactive : App.skin.buttons.usable;
       const bg = this.tmouse ? App.skin.buttons.highlight : App.skin.background;
       ctx.drawText(title(), 0, 0, fg, bg)
+    },
+    draw(ctx) {
+      this.drawButton(ctx)
     },
     mousedown({button}) {
       if (button === 0) this.click()
@@ -157,7 +160,7 @@ function textToolOverlay({x, y, tx, ty}) {
         const lines = this.text.split('\n')
         lines.forEach((line, y) => {
           for (let i = 0; i < line.length; i++) {
-            App.currentLayer.set(`${tx + i},${ty + y}`, this.applied(tx + i, ty + y, line.charCodeAt(i)))
+            App.currentLayer.data.set(`${tx + i},${ty + y}`, this.applied(tx + i, ty + y, line.charCodeAt(i)))
           }
         })
         App.finishChange()
@@ -167,7 +170,7 @@ function textToolOverlay({x, y, tx, ty}) {
       this.text += e.key
     },
     applied(x, y, c) {
-      const paint = { fg: DefaultForeground, bg: DefaultBackground, char: 0, ...(App.currentLayer.get(`${x},${y}`) ?? {}) }
+      const paint = { fg: DefaultForeground, bg: DefaultBackground, char: 0, ...(App.currentLayer.data.get(`${x},${y}`) ?? {}) }
       if (App.apply.glyph) paint.char = c
       if (App.apply.fg) paint.fg = App.paint.fg
       if (App.apply.bg) paint.bg = App.paint.bg
@@ -230,7 +233,7 @@ function newFile() {
   return {
     name: 'unnamed',
     layers: [
-      new Map,
+      { data: new Map },
     ],
     selectedLayer: 0,
     undoStack: [],
@@ -603,12 +606,18 @@ const App = {
   set redoStack(x) {
     this.currentFile.redoStack = x
   },
-  beginChange() {
+  beginChange({layerDataUnchanged, changingLayer} = {}) {
     if (this.changing) return
     this.changing = true
-    const changingLayer = this.currentFile.selectedLayer
-    const savedLayers = this.currentFile.layers.map((x, i) => i === changingLayer ? new Map(x) : x)
-    this.undoStack.push(savedLayers)
+    if (changingLayer == null) changingLayer = this.currentFile.selectedLayer
+    this.undoStack.push(this.currentFile.layers)
+    this.currentFile.layers = this.currentFile.layers.map((x, i) => {
+      if (i === changingLayer && !layerDataUnchanged) {
+        return {...x, data: new Map(x.data)}
+      } else {
+        return {...x}
+      }
+    })
     while (this.undoStack.length > MAX_UNDO_STEPS)
       this.undoStack.shift()
     this.redoStack = []
@@ -622,12 +631,14 @@ const App = {
     if (this.changing || !this.undoStack.length) return
     this.redoStack.push(this.currentFile.layers)
     this.currentFile.layers = this.undoStack.pop()
+    this.currentFile.selectedLayer = Math.min(this.currentFile.selectedLayer, this.currentFile.layers.length - 1)
     this.save()
   },
   redo() {
     if (this.changing || !this.redoStack.length) return
     this.undoStack.push(this.currentFile.layers)
     this.currentFile.layers = this.redoStack.pop()
+    this.currentFile.selectedLayer = Math.min(this.currentFile.selectedLayer, this.currentFile.layers.length - 1)
     this.save()
   },
   save() {
@@ -738,114 +749,117 @@ const App = {
           if (x - this.offsetX < 0 || y - this.offsetY < 0) return
           ctx.drawChar(c, x - this.offsetX, y - this.offsetY, fg, bg)
         }
-        for (const [k, v] of App.currentLayer.entries()) {
-          const [x, y] = k.split(',')
-          const { char, fg, bg } = v
-          drawChar(char ?? 0x20, +x, +y, fg, bg)
-        }
-        if (this.tmouse) {
-          if (this.panMode) {
-            const char = this.panStart ? '*' : '+'
-            drawChar(char.charCodeAt(0), this.tmouse.x, this.tmouse.y, WHITE, BLACK)
-            return
+        App.currentFile.layers.forEach((layer, i) => {
+          if (layer.hidden) return
+          for (const [k, v] of layer.data.entries()) {
+            const [x, y] = k.split(',')
+            const { char, fg, bg } = v
+            drawChar(char ?? 0x20, +x, +y, fg, bg)
           }
-          if (App.tool === 'cell') {
-            if (App.toolOptions.joinCells) {
-              const {x, y} = this.tmouse
-              const get = (tx, ty) => {
-                if (tx === x && ty === y && App.apply.glyph) return App.paint.char
-                else return App.currentLayer.get(`${tx},${ty}`)?.char ?? 0
-              }
-              const {fg, bg, char: appliedChar} = this.applied(x, y)
-              for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
-                const char = App.apply.glyph ? this.joinedCellAt(x+dx, y+dy, get) : appliedChar
-                drawChar(char, x+dx, y+dy, fg, bg)
-              }
-            } else {
-              const { char = 0, fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
-              drawChar(char, this.tmouse.x, this.tmouse.y, fg, bg)
+          if (this.tmouse && i === App.currentFile.selectedLayer) {
+            if (this.panMode) {
+              const char = this.panStart ? '*' : '+'
+              drawChar(char.charCodeAt(0), this.tmouse.x, this.tmouse.y, WHITE, BLACK)
+              return
             }
-          }
-          if (App.tool === 'line' && this.toolStart) {
-            bresenhamLine(this.toolStart.x, this.toolStart.y, this.tmouse.x, this.tmouse.y, (x, y) => {
-              const { char = 0, fg, bg } = this.applied(x, y)
-              drawChar(char, x, y, fg, bg)
-            })
-          }
-          if (App.tool === 'rect' && this.toolStart) {
-            const lx = Math.min(this.toolStart.x, this.tmouse.x)
-            const hx = Math.max(this.toolStart.x, this.tmouse.x)
-            const ly = Math.min(this.toolStart.y, this.tmouse.y)
-            const hy = Math.max(this.toolStart.y, this.tmouse.y)
-            for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
-              const p = {...App.paint}
-              if (!App.toolOptions.fillRect) {
-                if (isSingleBoxDrawingChar(p.char)) {
-                  if (y === ly) {
-                    if (x === lx) p.char = BoxDrawing.__RD
-                    else if (x === hx) p.char = BoxDrawing.L__D
-                    else p.char = BoxDrawing.L_R_
-                  } else if (y === hy) {
-                    if (x === lx) p.char = BoxDrawing._UR_
-                    else if (x === hx) p.char = BoxDrawing.LU__
-                    else p.char = BoxDrawing.L_R_
-                  } else p.char = BoxDrawing._U_D
-                } else if (isDoubleBoxDrawingChar(p.char)) {
-                  if (y === ly) {
-                    if (x === lx) p.char = BoxDrawingDouble.__RD
-                    else if (x === hx) p.char = BoxDrawingDouble.L__D
-                    else p.char = BoxDrawingDouble.L_R_
-                  } else if (y === hy) {
-                    if (x === lx) p.char = BoxDrawingDouble._UR_
-                    else if (x === hx) p.char = BoxDrawingDouble.LU__
-                    else p.char = BoxDrawingDouble.L_R_
-                  } else p.char = BoxDrawingDouble._U_D
+            if (App.tool === 'cell') {
+              if (App.toolOptions.joinCells) {
+                const {x, y} = this.tmouse
+                const get = (tx, ty) => {
+                  if (tx === x && ty === y && App.apply.glyph) return App.paint.char
+                  else return App.currentLayer.data.get(`${tx},${ty}`)?.char ?? 0
                 }
+                const {fg, bg, char: appliedChar} = this.applied(x, y)
+                for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
+                  const char = App.apply.glyph ? this.joinedCellAt(x+dx, y+dy, get) : appliedChar
+                  drawChar(char, x+dx, y+dy, fg, bg)
+                }
+              } else {
+                const { char = 0, fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
+                drawChar(char, this.tmouse.x, this.tmouse.y, fg, bg)
               }
-              const { char = 0, fg, bg } = this.applied(x, y, p)
-              if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
+            }
+            if (App.tool === 'line' && this.toolStart) {
+              bresenhamLine(this.toolStart.x, this.toolStart.y, this.tmouse.x, this.tmouse.y, (x, y) => {
+                const { char = 0, fg, bg } = this.applied(x, y)
                 drawChar(char, x, y, fg, bg)
+              })
+            }
+            if (App.tool === 'rect' && this.toolStart) {
+              const lx = Math.min(this.toolStart.x, this.tmouse.x)
+              const hx = Math.max(this.toolStart.x, this.tmouse.x)
+              const ly = Math.min(this.toolStart.y, this.tmouse.y)
+              const hy = Math.max(this.toolStart.y, this.tmouse.y)
+              for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
+                const p = {...App.paint}
+                if (!App.toolOptions.fillRect) {
+                  if (isSingleBoxDrawingChar(p.char)) {
+                    if (y === ly) {
+                      if (x === lx) p.char = BoxDrawing.__RD
+                      else if (x === hx) p.char = BoxDrawing.L__D
+                      else p.char = BoxDrawing.L_R_
+                    } else if (y === hy) {
+                      if (x === lx) p.char = BoxDrawing._UR_
+                      else if (x === hx) p.char = BoxDrawing.LU__
+                      else p.char = BoxDrawing.L_R_
+                    } else p.char = BoxDrawing._U_D
+                  } else if (isDoubleBoxDrawingChar(p.char)) {
+                    if (y === ly) {
+                      if (x === lx) p.char = BoxDrawingDouble.__RD
+                      else if (x === hx) p.char = BoxDrawingDouble.L__D
+                      else p.char = BoxDrawingDouble.L_R_
+                    } else if (y === hy) {
+                      if (x === lx) p.char = BoxDrawingDouble._UR_
+                      else if (x === hx) p.char = BoxDrawingDouble.LU__
+                      else p.char = BoxDrawingDouble.L_R_
+                    } else p.char = BoxDrawingDouble._U_D
+                  }
+                }
+                const { char = 0, fg, bg } = this.applied(x, y, p)
+                if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
+                  drawChar(char, x, y, fg, bg)
+              }
+            }
+            if (App.tool === 'oval' && this.toolStart) {
+              (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(this.tmouse.x - this.toolStart.x), Math.abs(this.tmouse.y - this.toolStart.y), (x, y) => {
+                const { char = 0, fg, bg } = this.applied(x, y)
+                drawChar(char, x, y, fg, bg)
+              })
+            }
+            if (App.tool === 'copy' && this.toolStart) {
+              const lx = Math.min(this.toolStart.x, this.tmouse.x)
+              const hx = Math.max(this.toolStart.x, this.tmouse.x)
+              const ly = Math.min(this.toolStart.y, this.tmouse.y)
+              const hy = Math.max(this.toolStart.y, this.tmouse.y)
+              for (let y = ly; y <= hy; y++) {
+                drawChar(BoxDrawing._U_D, lx - 1, y, WHITE, BLACK)
+                drawChar(BoxDrawing._U_D, hx + 1, y, WHITE, BLACK)
+              }
+              for (let x = lx; x <= hx; x++) {
+                drawChar(BoxDrawing.L_R_, x, ly - 1, WHITE, BLACK)
+                drawChar(BoxDrawing.L_R_, x, hy + 1, WHITE, BLACK)
+              }
+              drawChar(BoxDrawing.__RD, lx - 1, ly - 1, WHITE, BLACK)
+              drawChar(BoxDrawing.L__D, hx + 1, ly - 1, WHITE, BLACK)
+              drawChar(BoxDrawing._UR_, lx - 1, hy + 1, WHITE, BLACK)
+              drawChar(BoxDrawing.LU__, hx + 1, hy + 1, WHITE, BLACK)
+            }
+            if (App.tool === 'paste' && App.pasteboard) {
+              for (const [k, v] of App.pasteboard.entries()) {
+                const [x, y] = k.split(',').map(i => +i)
+                const paint = { ...(App.currentLayer.data.get(`${x + this.tmouse.x},${y + this.tmouse.y}`) ?? {}) }
+                if (App.apply.glyph) paint.char = v.char
+                if (App.apply.fg) paint.fg = v.fg
+                if (App.apply.bg) paint.bg = v.bg
+                drawChar(paint.char, x + this.tmouse.x, y + this.tmouse.y, paint.fg, paint.bg)
+              }
             }
           }
-          if (App.tool === 'oval' && this.toolStart) {
-            (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(this.tmouse.x - this.toolStart.x), Math.abs(this.tmouse.y - this.toolStart.y), (x, y) => {
-              const { char = 0, fg, bg } = this.applied(x, y)
-              drawChar(char, x, y, fg, bg)
-            })
-          }
-          if (App.tool === 'copy' && this.toolStart) {
-            const lx = Math.min(this.toolStart.x, this.tmouse.x)
-            const hx = Math.max(this.toolStart.x, this.tmouse.x)
-            const ly = Math.min(this.toolStart.y, this.tmouse.y)
-            const hy = Math.max(this.toolStart.y, this.tmouse.y)
-            for (let y = ly; y <= hy; y++) {
-              drawChar(BoxDrawing._U_D, lx - 1, y, WHITE, BLACK)
-              drawChar(BoxDrawing._U_D, hx + 1, y, WHITE, BLACK)
-            }
-            for (let x = lx; x <= hx; x++) {
-              drawChar(BoxDrawing.L_R_, x, ly - 1, WHITE, BLACK)
-              drawChar(BoxDrawing.L_R_, x, hy + 1, WHITE, BLACK)
-            }
-            drawChar(BoxDrawing.__RD, lx - 1, ly - 1, WHITE, BLACK)
-            drawChar(BoxDrawing.L__D, hx + 1, ly - 1, WHITE, BLACK)
-            drawChar(BoxDrawing._UR_, lx - 1, hy + 1, WHITE, BLACK)
-            drawChar(BoxDrawing.LU__, hx + 1, hy + 1, WHITE, BLACK)
-          }
-          if (App.tool === 'paste' && App.pasteboard) {
-            for (const [k, v] of App.pasteboard.entries()) {
-              const [x, y] = k.split(',').map(i => +i)
-              const paint = { ...(App.currentLayer.get(`${x + this.tmouse.x},${y + this.tmouse.y}`) ?? {}) }
-              if (App.apply.glyph) paint.char = v.char
-              if (App.apply.fg) paint.fg = v.fg
-              if (App.apply.bg) paint.bg = v.bg
-              drawChar(paint.char, x + this.tmouse.x, y + this.tmouse.y, paint.fg, paint.bg)
-            }
-          }
-        }
+        })
       },
       applied(x, y, p) {
         if (!p) p = App.paint
-        const paint = { ...(App.currentLayer.get(`${x},${y}`) ?? {}) }
+        const paint = { ...(App.currentLayer.data.get(`${x},${y}`) ?? {}) }
         if (App.apply.glyph) paint.char = p.char
         if (App.apply.fg) paint.fg = p.fg
         if (App.apply.bg) paint.bg = p.bg
@@ -858,16 +872,16 @@ const App = {
             const {x, y} = this.tmouse
             const get = (tx, ty) => {
               if (tx === x && ty === y && App.apply.glyph) return App.paint.char
-              else return App.currentLayer.get(`${tx},${ty}`)?.char ?? 0
+              else return App.currentLayer.data.get(`${tx},${ty}`)?.char ?? 0
             }
             for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
               const char = this.joinedCellAt(x+dx, y+dy, get)
               const applied = {...this.applied(x + dx, y + dy)}
               if (App.apply.glyph) applied.char = char
-              App.currentLayer.set(`${x+dx},${y+dy}`, applied)
+              App.currentLayer.data.set(`${x+dx},${y+dy}`, applied)
             }
           } else {
-            App.currentLayer.set(`${x},${y}`, this.applied(x, y))
+            App.currentLayer.data.set(`${x},${y}`, this.applied(x, y))
           }
         })
         this.lastPaint = { x, y }
@@ -876,11 +890,11 @@ const App = {
         App.beginChange()
         for (const [k, v] of App.pasteboard.entries()) {
           const [dx, dy] = k.split(',').map(i => +i)
-          const paint = { ...(App.currentLayer.get(`${x+dx},${y+dy}`) ?? {}) }
+          const paint = { ...(App.currentLayer.data.get(`${x+dx},${y+dy}`) ?? {}) }
           if (App.apply.glyph) paint.char = v.char
           if (App.apply.fg) paint.fg = v.fg
           if (App.apply.bg) paint.bg = v.bg
-          App.currentLayer.set(`${x+dx},${y+dy}`, paint)
+          App.currentLayer.data.set(`${x+dx},${y+dy}`, paint)
         }
         App.finishChange()
       },
@@ -911,7 +925,7 @@ const App = {
           if (this.toolStart) {
             this.toolStart = null
           } else {
-            const paint = { char: 0, bg: DefaultBackground, fg: DefaultForeground, ...(App.currentLayer.get(`${x},${y}`) ?? {}) }
+            const paint = { char: 0, bg: DefaultBackground, fg: DefaultForeground, ...(App.currentLayer.data.get(`${x},${y}`) ?? {}) }
             if (App.apply.glyph) App.paint.char = paint.char ?? 0
             if (App.apply.fg) {
               App.paint.fg = paint.fg ?? DefaultForeground
@@ -945,7 +959,7 @@ const App = {
               if (App.tool === 'line') {
                 App.beginChange()
                 bresenhamLine(this.toolStart.x, this.toolStart.y, x, y, (x, y) => {
-                  App.currentLayer.set(`${x},${y}`, this.applied(x, y))
+                  App.currentLayer.data.set(`${x},${y}`, this.applied(x, y))
                 })
                 App.finishChange()
               } else if (App.tool === 'rect') {
@@ -980,13 +994,13 @@ const App = {
                     }
                   }
                   if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
-                    App.currentLayer.set(`${x},${y}`, this.applied(x, y, p))
+                    App.currentLayer.data.set(`${x},${y}`, this.applied(x, y, p))
                 }
                 App.finishChange()
               } else if (App.tool === 'oval') {
                 App.beginChange()
                 ;(App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(x - this.toolStart.x), Math.abs(y - this.toolStart.y), (x, y) => {
-                  App.currentLayer.set(`${x},${y}`, this.applied(x, y))
+                  App.currentLayer.data.set(`${x},${y}`, this.applied(x, y))
                 })
                 App.finishChange()
               } else if (App.tool === 'copy') {
@@ -998,9 +1012,9 @@ const App = {
                 const hy = Math.max(this.toolStart.y, y)
                 if (App.toolOptions.copyMode === 'cut') App.beginChange()
                 for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
-                  const a = App.currentLayer.get(`${x},${y}`)
+                  const a = App.currentLayer.data.get(`${x},${y}`)
                   if (a) pasteboard.set(`${x-lx},${y-ly}`, a)
-                  if (App.toolOptions.copyMode === 'cut') App.currentLayer.delete(`${x},${y}`)
+                  if (App.toolOptions.copyMode === 'cut') App.currentLayer.data.delete(`${x},${y}`)
                 }
                 if (App.toolOptions.copyMode === 'cut') App.finishChange()
                 App.pasteboard = pasteboard
@@ -1068,6 +1082,7 @@ const App = {
       click() { App.sidebar = 'browse' },
     }),
 
+    // -- Paint Sidebar --
     {
       name: 'sidebar/paint',
       display() { return App.sidebar === 'paint' },
@@ -1384,7 +1399,7 @@ const App = {
                   if (layers.length > 0) {
                     const file = newFile()
                     file.name = handle.name.replace(/\.xp$/, '')
-                    file.layers = layers.map(l => l.data)
+                    file.layers = layers.map(l => ({ data: l.data }))
                     file.selectedLayer = 0
                     App.files.push(file)
                     App.selectedFile = App.files.length - 1
@@ -1407,7 +1422,7 @@ const App = {
                     if (layers.length > 0) {
                       const file = newFile()
                       file.name = f.name.replace(/\.xp$/, '')
-                      file.layers = layers.map(l => l.data)
+                      file.layers = layers.map(l => ({ data: l.data }))
                       file.selectedLayer = 0
                       App.files.push(file)
                       App.selectedFile = App.files.length - 1
@@ -1444,7 +1459,7 @@ const App = {
                 const writable = await handle.createWritable()
                 const rxpBlob = await xp.write({
                   version: 0xffffffff,
-                  layers: App.currentFile.layers.map(data => ({data})),
+                  layers: App.currentFile.layers,
                 })
                 const buf = await rxpBlob.arrayBuffer()
                 await writable.write(buf)
@@ -1454,7 +1469,7 @@ const App = {
               const a = document.createElement('a')
               const rxpBlob = await xp.write({
                 version: 0xffffffff,
-                layers: App.currentFile.layers.map(data => ({data})),
+                layers: App.currentFile.layers,
               })
               const url = URL.createObjectURL(rxpBlob)
               try {
@@ -1707,7 +1722,7 @@ const App = {
             ctx.drawText(`Back`, 1, 2, {r: 0.5,g:0.5,b:0.5})
             if (canvas.tmouse) {
               const {x, y} = canvas.tmouse
-              const { fg, bg } = App.currentLayer.get(`${x},${y}`) ?? {}
+              const { fg, bg } = App.currentLayer.data.get(`${x},${y}`) ?? {}
               if (fg) {
                 const {r, g, b} = fg
                 ctx.drawText(`${[r,g,b].map(c => ((c*255)|0).toString().padStart(3, ' ')).join(' ')}`, 6, 1, App.skin.headers)
@@ -1731,9 +1746,112 @@ const App = {
             }
           },
         },
+
+        // -- Layers --
+        {
+          x: 0,
+          y: 54,
+          draw(ctx) {
+            const title = 'Layers'
+            ctx.drawBorder(0, 0, 18, 2 + App.currentFile.layers.length, App.skin.borders, App.skin.background)
+            ctx.drawChar(BoxDrawing.LU_D, 1, 0, App.skin.borders, App.skin.background)
+            ctx.drawText(title, 2, 0, App.skin.headers, App.skin.background)
+            ctx.drawChar(BoxDrawing._URD, 2 + title.length, 0, App.skin.borders, App.skin.background)
+            const numLayers = App.currentFile.layers.length
+            for (let y = 0; y < numLayers; y++) for (let x = 0; x < 16; x++)
+              ctx.drawChar(0, x + 1, y + 1, null, App.skin.background)
+            ctx.drawChar(BoxDrawing.LU_D, 14, numLayers + 1, App.skin.borders, App.skin.background)
+            ctx.drawChar(BoxDrawing._URD, 16, numLayers + 1, App.skin.borders, App.skin.background)
+          },
+        },
+        button({
+          x: 15,
+          y: 0, // dynamically updated during draw
+          width: 1,
+          title() { return '+' },
+          draw(ctx) {
+            this.y = 54 + App.currentFile.layers.length + 1
+            this.drawButton(ctx)
+          },
+          click() {
+            App.beginChange({changingLayer: -1})
+            App.currentFile.layers.push({data: new Map})
+            App.currentFile.selectedLayer = App.currentFile.layers.length - 1
+            App.finishChange()
+          },
+        }),
+        {
+          x: 1,
+          y: 55,
+          width: 16,
+          height: 0, // dynamically calculated during draw
+          draw(ctx) {
+            const numLayers = App.currentFile.layers.length
+            this.height = numLayers
+            const { active, inactive, usable, highlight } = App.skin.buttons
+            App.currentFile.layers.forEach((l, i) => {
+              const y = numLayers - i - 1
+              const mx = this.tmouse?.y === y ? this.tmouse.x : null
+              ctx.drawText(i + 1, 0, y, i === App.currentFile.selectedLayer ? active : inactive)
+              if (numLayers > 1) {
+                if (i < numLayers - 1)
+                  ctx.drawChar(0x18, 12, y, usable, mx === 12 ? highlight : null)
+                if (i > 0)
+                  ctx.drawChar(0x19, 11, y, usable, mx === 11 ? highlight : null)
+              }
+              ctx.drawText('L', 13, y, l.locked ? active : inactive, mx === 13 ? highlight : null)
+              ctx.drawText(l.hidden ? '\u00ed' : '\u00ec', 14, y, !l.hidden ? active : inactive, mx === 14 ? highlight : null)
+              if (numLayers > 1) ctx.drawText('X', 15, y, usable, mx === 15 ? highlight : null)
+            })
+          },
+          mousedown({x, y, button}) {
+            if (button === 0) {
+              const numLayers = App.currentFile.layers.length
+              const li = numLayers - y - 1
+              if (x < 11) {
+                App.currentFile.selectedLayer = li
+              }
+              if (x === 11) { // Move down
+                if (numLayers > 1 && li > 0) {
+                  App.beginChange({layerDataUnchanged: true, changingLayer: -1})
+                  const tmp = App.currentFile.layers[li - 1]
+                  App.currentFile.layers[li - 1] = App.currentFile.layers[li]
+                  App.currentFile.layers[li] = tmp
+                  App.finishChange()
+                }
+              }
+              if (x === 12) { // Move up
+                if (numLayers > 1 && li < numLayers - 1) {
+                  App.beginChange({layerDataUnchanged: true, changingLayer: -1})
+                  const tmp = App.currentFile.layers[li + 1]
+                  App.currentFile.layers[li + 1] = App.currentFile.layers[li]
+                  App.currentFile.layers[li] = tmp
+                  App.finishChange()
+                }
+              }
+              if (x === 13) { // Lock
+                App.beginChange({layerDataUnchanged: true, changingLayer: li})
+                App.currentFile.layers[li].locked = !App.currentFile.layers[li].locked
+                App.finishChange()
+              }
+              if (x === 14) { // Toggle hidden
+                App.beginChange({layerDataUnchanged: true, changingLayer: li})
+                App.currentFile.layers[li].hidden = !App.currentFile.layers[li].hidden
+                App.finishChange()
+              }
+              if (x === 15 && numLayers > 1) { // Delete
+                App.beginChange({changingLayer: -1})
+                App.currentFile.layers.splice(li, 1)
+                App.currentFile.selectedLayer = Math.min(App.currentFile.layers.length - 1, App.currentFile.selectedLayer)
+                App.finishChange()
+              }
+            }
+          }
+        },
       ],
     },
 
+    // -- Browse Sidebar --
     {
       name: 'sidebar/browse',
       display() { return App.sidebar === 'browse' },
@@ -1881,6 +1999,7 @@ const App = {
             drawChar(App.font.image, c, x + el.x, y + el.y, fg, bg)
           },
           drawText(str, x, y, fg, bg) {
+            str = '' + str
             for (let i = 0; i < str.length; i++) {
               this.drawChar(str.charCodeAt(i), x+i, y, fg, bg)
             }
@@ -1988,11 +2107,11 @@ async function start() {
   const art = await idb.getItem('art')
   if (art) {
     App.files = art.files.map(f => {
-      if (f.data) {
-        f.layers = [f.data]
-        f.selectedLayer = 0
-        delete f.data
-      }
+      f.layers = f.layers.map(l => {
+        if (l instanceof Map)
+          return {data: l}
+        return l
+      })
       return f
     })
     App.selectedFile = art.selectedFile
@@ -2102,7 +2221,7 @@ async function start() {
           spriteBatch.drawRegion(tex, sx * tw, sy * th, tw, th, dx, dy, tw, th, fg)
     }
 
-    console.time('draw')
+    //console.time('draw')
     spriteBatch.begin()
     App.draw({
       width: (canvas.width / App.font.tileWidth) | 0,
@@ -2112,7 +2231,7 @@ async function start() {
       }
     })
     spriteBatch.end()
-    console.timeEnd('draw')
+    //console.timeEnd('draw')
   }
 
   window.addEventListener('mousemove', (e) => {
