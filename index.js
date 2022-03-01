@@ -657,7 +657,7 @@ const App = {
   },
   mouseButtons: 0,
   paint: {
-    char: 1,
+    char: 0,
     fg: DefaultForeground,
     bg: DefaultBackground,
   },
@@ -1571,7 +1571,7 @@ const App = {
           y: 36,
           width: 1,
           draw(ctx) {
-            ctx.drawChar(0, 0, 0, null, App.paint.bg)
+            ctx.drawChar(0, 0, 0, BLACK, App.paint.bg)
           },
           click() {
             App.ui.push(colorChooser(App.paint.bg, (c) => {
@@ -1742,7 +1742,7 @@ const App = {
               ctx.drawText(`${['-','-','-'].map(c => c.padStart(3, ' ')).join(' ')}`, 6, 1, App.skin.headers)
               ctx.drawText(`${['-','-','-'].map(c => c.padStart(3, ' ')).join(' ')}`, 6, 2, App.skin.headers)
             }
-            ctx.drawText(`MEM:${(performance.memory.usedJSHeapSize/1024/1024)|0}M`, 1, 3, {r: 0.5,g:0.5,b:0.5})
+            ctx.drawText(`Mem:${(performance.memory.usedJSHeapSize/1024/1024)|0}M`, 1, 3, {r: 0.5,g:0.5,b:0.5})
             if (canvas.tmouse) {
               const coords = `${canvas.tmouse.x},${canvas.tmouse.y}`
               ctx.drawText(coords, 17 - coords.length, 3, App.skin.headers)
