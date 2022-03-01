@@ -762,6 +762,82 @@ const App = {
         const {x, y} = p
         return {x: x + this.offsetX, y: y + this.offsetY}
       },
+      currentChange(f) {
+        if (App.tool === 'cell') {
+          if (App.toolOptions.joinCells) {
+            const {x, y} = this.tmouse
+            const get = (tx, ty) => {
+              if (tx === x && ty === y && App.apply.glyph) return App.paint.char
+              else return App.currentLayer.data.get(`${tx},${ty}`)?.char ?? 0
+            }
+            const {fg, bg, char: appliedChar} = this.applied(x, y)
+            for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
+              const char = App.apply.glyph ? this.joinedCellAt(x+dx, y+dy, get) : appliedChar
+              f(char, x+dx, y+dy, fg, bg)
+            }
+          } else {
+            const { char = 0, fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
+            f(char, this.tmouse.x, this.tmouse.y, fg, bg)
+          }
+        }
+        if (App.tool === 'line' && this.toolStart) {
+          bresenhamLine(this.toolStart.x, this.toolStart.y, this.tmouse.x, this.tmouse.y, (x, y) => {
+            const { char = 0, fg, bg } = this.applied(x, y)
+            f(char, x, y, fg, bg)
+          })
+        }
+        if (App.tool === 'rect' && this.toolStart) {
+          const lx = Math.min(this.toolStart.x, this.tmouse.x)
+          const hx = Math.max(this.toolStart.x, this.tmouse.x)
+          const ly = Math.min(this.toolStart.y, this.tmouse.y)
+          const hy = Math.max(this.toolStart.y, this.tmouse.y)
+          for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
+            const p = {...App.paint}
+            if (!App.toolOptions.fillRect) {
+              if (isSingleBoxDrawingChar(p.char)) {
+                if (y === ly) {
+                  if (x === lx) p.char = BoxDrawing.__RD
+                  else if (x === hx) p.char = BoxDrawing.L__D
+                  else p.char = BoxDrawing.L_R_
+                } else if (y === hy) {
+                  if (x === lx) p.char = BoxDrawing._UR_
+                  else if (x === hx) p.char = BoxDrawing.LU__
+                  else p.char = BoxDrawing.L_R_
+                } else p.char = BoxDrawing._U_D
+              } else if (isDoubleBoxDrawingChar(p.char)) {
+                if (y === ly) {
+                  if (x === lx) p.char = BoxDrawingDouble.__RD
+                  else if (x === hx) p.char = BoxDrawingDouble.L__D
+                  else p.char = BoxDrawingDouble.L_R_
+                } else if (y === hy) {
+                  if (x === lx) p.char = BoxDrawingDouble._UR_
+                  else if (x === hx) p.char = BoxDrawingDouble.LU__
+                  else p.char = BoxDrawingDouble.L_R_
+                } else p.char = BoxDrawingDouble._U_D
+              }
+            }
+            const { char = 0, fg, bg } = this.applied(x, y, p)
+            if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
+              f(char, x, y, fg, bg)
+          }
+        }
+        if (App.tool === 'oval' && this.toolStart) {
+          (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(this.tmouse.x - this.toolStart.x), Math.abs(this.tmouse.y - this.toolStart.y), (x, y) => {
+            const { char = 0, fg, bg } = this.applied(x, y)
+            f(char, x, y, fg, bg)
+          })
+        }
+        if (App.tool === 'paste' && App.pasteboard) {
+          for (const [k, v] of App.pasteboard.entries()) {
+            const [x, y] = k.split(',').map(i => +i)
+            const paint = { ...(App.currentLayer.data.get(`${x + this.tmouse.x},${y + this.tmouse.y}`) ?? {}) }
+            if (App.apply.glyph) paint.char = v.char
+            if (App.apply.fg) paint.fg = v.fg
+            if (App.apply.bg) paint.bg = v.bg
+            f(paint.char, x + this.tmouse.x, y + this.tmouse.y, paint.fg, paint.bg)
+          }
+        }
+      },
       draw(ctx) {
         const drawChar = (c, x, y, fg, bg) => {
           if (x - this.offsetX < 0 || y - this.offsetY < 0) return
@@ -780,70 +856,6 @@ const App = {
               drawChar(char.charCodeAt(0), this.tmouse.x, this.tmouse.y, WHITE, BLACK)
               return
             }
-            if (App.tool === 'cell') {
-              if (App.toolOptions.joinCells) {
-                const {x, y} = this.tmouse
-                const get = (tx, ty) => {
-                  if (tx === x && ty === y && App.apply.glyph) return App.paint.char
-                  else return App.currentLayer.data.get(`${tx},${ty}`)?.char ?? 0
-                }
-                const {fg, bg, char: appliedChar} = this.applied(x, y)
-                for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
-                  const char = App.apply.glyph ? this.joinedCellAt(x+dx, y+dy, get) : appliedChar
-                  drawChar(char, x+dx, y+dy, fg, bg)
-                }
-              } else {
-                const { char = 0, fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
-                drawChar(char, this.tmouse.x, this.tmouse.y, fg, bg)
-              }
-            }
-            if (App.tool === 'line' && this.toolStart) {
-              bresenhamLine(this.toolStart.x, this.toolStart.y, this.tmouse.x, this.tmouse.y, (x, y) => {
-                const { char = 0, fg, bg } = this.applied(x, y)
-                drawChar(char, x, y, fg, bg)
-              })
-            }
-            if (App.tool === 'rect' && this.toolStart) {
-              const lx = Math.min(this.toolStart.x, this.tmouse.x)
-              const hx = Math.max(this.toolStart.x, this.tmouse.x)
-              const ly = Math.min(this.toolStart.y, this.tmouse.y)
-              const hy = Math.max(this.toolStart.y, this.tmouse.y)
-              for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
-                const p = {...App.paint}
-                if (!App.toolOptions.fillRect) {
-                  if (isSingleBoxDrawingChar(p.char)) {
-                    if (y === ly) {
-                      if (x === lx) p.char = BoxDrawing.__RD
-                      else if (x === hx) p.char = BoxDrawing.L__D
-                      else p.char = BoxDrawing.L_R_
-                    } else if (y === hy) {
-                      if (x === lx) p.char = BoxDrawing._UR_
-                      else if (x === hx) p.char = BoxDrawing.LU__
-                      else p.char = BoxDrawing.L_R_
-                    } else p.char = BoxDrawing._U_D
-                  } else if (isDoubleBoxDrawingChar(p.char)) {
-                    if (y === ly) {
-                      if (x === lx) p.char = BoxDrawingDouble.__RD
-                      else if (x === hx) p.char = BoxDrawingDouble.L__D
-                      else p.char = BoxDrawingDouble.L_R_
-                    } else if (y === hy) {
-                      if (x === lx) p.char = BoxDrawingDouble._UR_
-                      else if (x === hx) p.char = BoxDrawingDouble.LU__
-                      else p.char = BoxDrawingDouble.L_R_
-                    } else p.char = BoxDrawingDouble._U_D
-                  }
-                }
-                const { char = 0, fg, bg } = this.applied(x, y, p)
-                if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
-                  drawChar(char, x, y, fg, bg)
-              }
-            }
-            if (App.tool === 'oval' && this.toolStart) {
-              (App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(this.tmouse.x - this.toolStart.x), Math.abs(this.tmouse.y - this.toolStart.y), (x, y) => {
-                const { char = 0, fg, bg } = this.applied(x, y)
-                drawChar(char, x, y, fg, bg)
-              })
-            }
             if (App.tool === 'copy' && this.toolStart) {
               const lx = Math.min(this.toolStart.x, this.tmouse.x)
               const hx = Math.max(this.toolStart.x, this.tmouse.x)
@@ -861,16 +873,8 @@ const App = {
               drawChar(BoxDrawing.L__D, hx + 1, ly - 1, WHITE, BLACK)
               drawChar(BoxDrawing._UR_, lx - 1, hy + 1, WHITE, BLACK)
               drawChar(BoxDrawing.LU__, hx + 1, hy + 1, WHITE, BLACK)
-            }
-            if (App.tool === 'paste' && App.pasteboard) {
-              for (const [k, v] of App.pasteboard.entries()) {
-                const [x, y] = k.split(',').map(i => +i)
-                const paint = { ...(App.currentLayer.data.get(`${x + this.tmouse.x},${y + this.tmouse.y}`) ?? {}) }
-                if (App.apply.glyph) paint.char = v.char
-                if (App.apply.fg) paint.fg = v.fg
-                if (App.apply.bg) paint.bg = v.bg
-                drawChar(paint.char, x + this.tmouse.x, y + this.tmouse.y, paint.fg, paint.bg)
-              }
+            } else {
+              this.currentChange(drawChar)
             }
           }
         })
@@ -904,18 +908,6 @@ const App = {
         })
         this.lastPaint = { x, y }
       },
-      paste(x, y) {
-        App.beginChange()
-        for (const [k, v] of App.pasteboard.entries()) {
-          const [dx, dy] = k.split(',').map(i => +i)
-          const paint = { ...(App.currentLayer.data.get(`${x+dx},${y+dy}`) ?? {}) }
-          if (App.apply.glyph) paint.char = v.char
-          if (App.apply.fg) paint.fg = v.fg
-          if (App.apply.bg) paint.bg = v.bg
-          App.currentLayer.data.set(`${x+dx},${y+dy}`, paint)
-        }
-        App.finishChange()
-      },
       mousedown({x, y, button}) {
         const ox = x
         const oy = y
@@ -937,7 +929,11 @@ const App = {
           } else if (App.tool === 'text') {
             App.ui.push(textToolOverlay({x: this.x + ox, y: this.y + oy, tx: x, ty: y}))
           } else if (App.tool === 'paste') {
-            this.paste(x, y)
+            App.beginChange()
+            this.currentChange((char, x, y, fg, bg) => {
+              App.currentLayer.data.set(`${x},${y}`, {char, fg, bg})
+            })
+            App.finishChange()
           }
         } else if (button === 2) {
           if (this.toolStart) {
@@ -974,55 +970,7 @@ const App = {
           }
           if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval' || App.tool === 'copy') {
             if (this.tmouse && this.toolStart) {
-              if (App.tool === 'line') {
-                App.beginChange()
-                bresenhamLine(this.toolStart.x, this.toolStart.y, x, y, (x, y) => {
-                  App.currentLayer.data.set(`${x},${y}`, this.applied(x, y))
-                })
-                App.finishChange()
-              } else if (App.tool === 'rect') {
-                App.beginChange()
-                const lx = Math.min(this.toolStart.x, x)
-                const hx = Math.max(this.toolStart.x, x)
-                const ly = Math.min(this.toolStart.y, y)
-                const hy = Math.max(this.toolStart.y, y)
-                for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
-                  const p = {...App.paint}
-                  if (!App.toolOptions.fillRect) {
-                    if (isSingleBoxDrawingChar(p.char)) {
-                      if (y === ly) {
-                        if (x === lx) p.char = BoxDrawing.__RD
-                        else if (x === hx) p.char = BoxDrawing.L__D
-                        else p.char = BoxDrawing.L_R_
-                      } else if (y === hy) {
-                        if (x === lx) p.char = BoxDrawing._UR_
-                        else if (x === hx) p.char = BoxDrawing.LU__
-                        else p.char = BoxDrawing.L_R_
-                      } else p.char = BoxDrawing._U_D
-                    } else if (isDoubleBoxDrawingChar(p.char)) {
-                      if (y === ly) {
-                        if (x === lx) p.char = BoxDrawingDouble.__RD
-                        else if (x === hx) p.char = BoxDrawingDouble.L__D
-                        else p.char = BoxDrawingDouble.L_R_
-                      } else if (y === hy) {
-                        if (x === lx) p.char = BoxDrawingDouble._UR_
-                        else if (x === hx) p.char = BoxDrawingDouble.LU__
-                        else p.char = BoxDrawingDouble.L_R_
-                      } else p.char = BoxDrawingDouble._U_D
-                    }
-                  }
-                  if (App.toolOptions.fillRect || x === lx || x === hx || y === ly || y === hy)
-                    App.currentLayer.data.set(`${x},${y}`, this.applied(x, y, p))
-                }
-                App.finishChange()
-              } else if (App.tool === 'oval') {
-                App.beginChange()
-                ;(App.toolOptions.fillOval ? filledEllipse : ellipse)(this.toolStart.x, this.toolStart.y, Math.abs(x - this.toolStart.x), Math.abs(y - this.toolStart.y), (x, y) => {
-                  App.currentLayer.data.set(`${x},${y}`, this.applied(x, y))
-                })
-                App.finishChange()
-              } else if (App.tool === 'copy') {
-                // TODO: should cut use App.apply?
+              if (App.tool === 'copy') {
                 const pasteboard = new Map
                 const lx = Math.min(this.toolStart.x, x)
                 const hx = Math.max(this.toolStart.x, x)
@@ -1036,6 +984,12 @@ const App = {
                 }
                 if (App.toolOptions.copyMode === 'cut') App.finishChange()
                 App.pasteboard = pasteboard
+              } else {
+                App.beginChange()
+                this.currentChange((char, x, y, fg, bg) => {
+                  App.currentLayer.data.set(`${x},${y}`, {char, fg, bg})
+                })
+                App.finishChange()
               }
             }
             this.toolStart = null
