@@ -55,9 +55,9 @@ function initUi(el) {
   Object.setPrototypeOf(el, {
     get tmouse() {
       const atm = App.tmouse
-      if (!atm || !this.width || !this.height || atm.x < this.x || atm.y < this.y || atm.x >= this.x + this.width || atm.y >= this.y + this.height)
+      if (!atm || !this.width || !this.height || atm.x < this._ox || atm.y < this._oy || atm.x >= this._ox + this.width || atm.y >= this._oy + this.height)
         return null
-      return {x: atm.x - this.x, y: atm.y - this.y}
+      return {x: atm.x - this._ox, y: atm.y - this._oy}
     },
     [UiInitialized]: true
   })
@@ -296,8 +296,8 @@ function deleteDialog(file) {
     },
     children: [
       button({
-        x: 22,
-        y: 5,
+        x: 2,
+        y: 3,
         width: 6,
         title() { return 'Delete' },
         click() {
@@ -306,8 +306,8 @@ function deleteDialog(file) {
         },
       }),
       button({
-        x: 29,
-        y: 5,
+        x: 9,
+        y: 3,
         width: 6,
         title() { return 'Cancel' },
         click() { dialog.exit() },
@@ -334,13 +334,16 @@ function colorChooser(initial, choose) {
   let [h, s, v] = rgb2hsv(initial.r, initial.g, initial.b)
   let major = 'hue'
   const dialog = initUi({
-    x: 0,
-    y: 0,
+    x: 19,
+    y: 1,
     captureKeys: true,
     exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
     keydown(e) {
       if (e.code === 'Escape') this.exit()
       e.stopPropagation()
+    },
+    draw(ctx) {
+      ctx.drawBorder(-1, -1, 56, 42, App.skin.borders, App.skin.background)
     },
     children: [
       // Color grid
@@ -422,7 +425,7 @@ function colorChooser(initial, choose) {
         },
         children: [
           button({
-            x: 47,
+            x: 1,
             y: 1,
             width: 5,
             title() { return 'OK    ' },
@@ -436,7 +439,7 @@ function colorChooser(initial, choose) {
             }
           }),
           button({
-            x: 47,
+            x: 1,
             y: 2,
             width: 5,
             title() { return 'Cancel' },
@@ -445,7 +448,7 @@ function colorChooser(initial, choose) {
             }
           }),
           {
-            x: 47,
+            x: 1,
             y: 4,
             draw(ctx) {
               ctx.drawText('New', 0, 0, App.skin.headers)
@@ -460,7 +463,7 @@ function colorChooser(initial, choose) {
 
           button({
             display: false, // TODO: make this work
-            x: 47,
+            x: 1,
             y: 11,
             width: 1,
             title() { return '\u00fe' },
@@ -468,7 +471,7 @@ function colorChooser(initial, choose) {
             click() { major = 'hue' },
           }),
           numberButton({
-            x: 50,
+            x: 4,
             y: 11,
             width: 3,
             value() { return h.toFixed(0) },
@@ -477,7 +480,7 @@ function colorChooser(initial, choose) {
           }),
           button({
             display: false, // TODO: make this work
-            x: 47,
+            x: 1,
             y: 13,
             width: 1,
             title() { return '\u00fe' },
@@ -485,7 +488,7 @@ function colorChooser(initial, choose) {
             click() { major = 'saturation' },
           }),
           numberButton({
-            x: 50,
+            x: 4,
             y: 13,
             width: 3,
             value() { return (s * 100).toFixed(0) },
@@ -493,7 +496,7 @@ function colorChooser(initial, choose) {
           }),
           button({
             display: false, // TODO: make this work
-            x: 47,
+            x: 1,
             y: 15,
             width: 1,
             title() { return '\u00fe' },
@@ -501,14 +504,14 @@ function colorChooser(initial, choose) {
             click() { major = 'value' },
           }),
           numberButton({
-            x: 50,
+            x: 4,
             y: 15,
             width: 3,
             value() { return (v * 100).toFixed(0) },
             setValue(x) { v = Math.max(0, Math.min(100, (Number(x)|0))) / 100 },
           }),
           {
-            x: 48,
+            x: 2,
             y: 11,
             draw(ctx) {
               ctx.drawText('H', 0, 0, App.skin.headers)
@@ -517,7 +520,7 @@ function colorChooser(initial, choose) {
             }
           },
           {
-            x: 48,
+            x: 2,
             y: 18,
             draw(ctx) {
               ctx.drawText('R', 0, 0, App.skin.headers)
@@ -526,7 +529,7 @@ function colorChooser(initial, choose) {
             }
           },
           numberButton({
-            x: 50,
+            x: 4,
             y: 18,
             width: 3,
             value() { return (hsv2rgb(h,s,v)[0] * 255).toFixed(0) },
@@ -536,7 +539,7 @@ function colorChooser(initial, choose) {
             }
           }),
           numberButton({
-            x: 50,
+            x: 4,
             y: 20,
             width: 3,
             value() { return (hsv2rgb(h,s,v)[1] * 255).toFixed(0) },
@@ -546,7 +549,7 @@ function colorChooser(initial, choose) {
             }
           }),
           numberButton({
-            x: 50,
+            x: 4,
             y: 22,
             width: 3,
             value() { return (hsv2rgb(h,s,v)[2] * 255).toFixed(0) },
@@ -556,7 +559,7 @@ function colorChooser(initial, choose) {
             }
           }),
           numberButton({
-            x: 47,
+            x: 1,
             y: 24,
             width: 6,
             pattern: /^[0-9a-f]*$/i,
@@ -2031,25 +2034,25 @@ const App = {
   },
 
   *eachUi() {
-    yield* iterate(this.ui)
-    function* iterate(els) {
+    yield* iterate(this.ui, [])
+    function* iterate(els, ancestors) {
       for (const el of els.slice()) {
         const display = el.display ?? true
         if (display && (typeof display !== 'function' || display())) {
-          yield el
-          yield* iterate(el.children ?? [])
+          yield [el, ancestors]
+          yield* iterate(el.children ?? [], [...ancestors, el])
         }
       }
     }
   },
   *eachUiReverse() {
-    yield* iterate(this.ui)
-    function* iterate(els) {
+    yield* iterate(this.ui, [])
+    function* iterate(els, ancestors) {
       for (const el of els.slice().reverse()) {
         const display = el.display ?? true
         if (display && (typeof display !== 'function' || display())) {
-          yield* iterate(el.children ?? [])
-          yield el
+          yield* iterate(el.children ?? [], [...ancestors, el])
+          yield [el, ancestors]
         }
       }
     }
@@ -2064,12 +2067,16 @@ const App = {
     this.laters.length = 0
   },
   draw({width, height, drawChar}) {
-    for (const el of this.eachUi()) {
+    for (const [el, ancestors] of this.eachUi()) {
       if (el.draw) {
+        const ox = el.x + ancestors.reduce((m, o) => m + (o.x ?? 0), 0)
+        const oy = el.y + ancestors.reduce((m, o) => m + (o.y ?? 0), 0)
+        el._ox = ox
+        el._oy = oy
         el.draw({
           width, height,
           drawChar(c, x, y, fg, bg) {
-            drawChar(App.font.image, c, x + el.x, y + el.y, fg, bg)
+            drawChar(App.font.image, c, x + ox, y + oy, fg, bg)
           },
           drawText(str, x, y, fg, bg) {
             str = '' + str
@@ -2098,27 +2105,33 @@ const App = {
   },
   mousemove(e) {
     const { x, y } = this.tmouse
-    for (const el of this.eachUiReverse()) {
-      if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
-        if (el.mousemove) {
-          e.x = x - el.x
-          e.y = y - el.y
+    for (const [el, ancestors] of this.eachUiReverse()) {
+      if (el.mousemove) {
+        const ox = el.x + ancestors.reduce((m, o) => m + (o.x ?? 0), 0)
+        const oy = el.y + ancestors.reduce((m, o) => m + (o.y ?? 0), 0)
+        if (x >= ox && x < ox + el.width && y >= oy && y < oy + el.height) {
+          e.x = x - ox
+          e.y = y - oy
           el.mousemove(e)
         }
+      }
       if (e.propagationStopped) break
     }
     this.doLaters()
   },
   mousedown(e) {
     const { x, y } = this.tmouse
-    for (const el of this.eachUiReverse()) {
+    for (const [el, ancestors] of this.eachUiReverse()) {
       const keyWasCaptured = el.captureKeys
-      if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
-        if (el.mousedown) {
-          e.x = x - el.x
-          e.y = y - el.y
+      if (el.mousedown) {
+        const ox = el.x + ancestors.reduce((m, o) => m + (o.x ?? 0), 0)
+        const oy = el.y + ancestors.reduce((m, o) => m + (o.y ?? 0), 0)
+        if (x >= ox && x < ox + el.width && y >= oy && y < oy + el.height) {
+          e.x = x - ox
+          e.y = y - oy
           el.mousedown(e)
         }
+      }
       if (e.propagationStopped || keyWasCaptured) break
     }
     this.doLaters()
@@ -2126,21 +2139,24 @@ const App = {
   mouseup(e) {
     if (this.tmouse) {
       const { x, y } = this.tmouse
-      for (const el of this.eachUiReverse()) {
+      for (const [el, ancestors] of this.eachUiReverse()) {
         const keyWasCaptured = el.captureKeys
-        if (x >= el.x && x < el.x + el.width && y >= el.y && y < el.y + el.height)
-          if (el.mouseup) {
-            e.x = x - el.x
-            e.y = y - el.y
+        if (el.mouseup) {
+          const ox = el.x + ancestors.reduce((m, o) => m + (o.x ?? 0), 0)
+          const oy = el.y + ancestors.reduce((m, o) => m + (o.y ?? 0), 0)
+          if (x >= ox && x < ox + el.width && y >= oy && y < oy + el.height) {
+            e.x = x - ox
+            e.y = y - oy
             el.mouseup(e)
           }
+        }
         if (e.propagationStopped || keyWasCaptured) break
       }
     }
     this.doLaters()
   },
   keydown(e) {
-    for (const el of this.eachUiReverse()) {
+    for (const [el] of this.eachUiReverse()) {
       const keyWasCaptured = el.captureKeys
       if (el.keydown)
         el.keydown(e)
@@ -2149,7 +2165,7 @@ const App = {
     this.doLaters()
   },
   keyup(e) {
-    for (const el of this.eachUiReverse()) {
+    for (const [el] of this.eachUiReverse()) {
       const keyWasCaptured = el.captureKeys
       if (el.keyup)
         el.keyup(e)
@@ -2158,7 +2174,7 @@ const App = {
     this.doLaters()
   },
   keypress(e) {
-    for (const el of this.eachUiReverse()) {
+    for (const [el] of this.eachUiReverse()) {
       const keyWasCaptured = el.captureKeys
       if (el.keypress)
         el.keypress(e)
@@ -2167,7 +2183,7 @@ const App = {
     this.doLaters()
   },
   blur() {
-    for (const el of this.eachUiReverse())
+    for (const [el] of this.eachUiReverse())
       if (el.blur)
         el.blur()
     this.doLaters()
