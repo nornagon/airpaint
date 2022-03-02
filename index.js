@@ -844,7 +844,9 @@ const App = {
     joinCells: false,
     copyMode: 'copy',
     fillEightNeighborhood: false,
+    showRectangleDimensions: false,
   },
+  showGrid: false,
   selectTool(tool) {
     if (tool === 'cell' && this.tool === 'cell') this.toolOptions.joinCells = !this.toolOptions.joinCells
     if (tool === 'rect' && this.tool === 'rect') this.toolOptions.fillRect = !this.toolOptions.fillRect
@@ -869,6 +871,7 @@ const App = {
       highlight: {r: 24/255,g: 38/255,b: 54/255},
     },
     info: {r: 222/255, g: 222/255, b: 222/255},
+    grid: {r: 0.5, g: 0.5, b: 0.5}, // TODO pull from source
   },
   ui: [
     // -- Canvas --
@@ -1020,6 +1023,12 @@ const App = {
             ? 'not-allowed'
             : 'default'
         App.canvasElement.style.cursor = cursor
+        if (App.showGrid) {
+          const gridSize = 8
+          for (let y = ((offsetY / gridSize)|0)*gridSize; y <= offsetY + ctx.height+1; y += gridSize)
+            for (let x = ((offsetX / gridSize)|0)*gridSize; x <= offsetX + ctx.width+1; x += gridSize)
+              drawChar(0x2b, x-1, y-1, y === 0 && x === 0 ? WHITE : App.skin.grid)
+        }
         App.currentFile.layers.forEach((layer, i) => {
           if (!layer.hidden) {
             for (const [[x, y], v] of layer.data.entries()) {
@@ -1561,6 +1570,14 @@ const App = {
               click() {
                 App.toolOptions.showRectangleDimensions = !App.toolOptions.showRectangleDimensions
               }
+            }),
+            button({
+              x: 1,
+              y: 6,
+              width: 7,
+              active() { return App.showGrid },
+              title() { return ' Grid  ' },
+              click() { App.showGrid = !App.showGrid }
             }),
           ],
         },
