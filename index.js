@@ -893,6 +893,12 @@ const App = {
           if (x - offsetX < 0 || y - offsetY < 0) return
           ctx.drawChar(c, x - offsetX, y - offsetY, fg, bg)
         }
+        const cursor = this.panMode
+          ? this.panStart ? 'grabbing' : 'grab'
+          : App.currentLayer.locked && (this.lastPaint || (this.toolStart && this.tool !== 'copy'))
+            ? 'not-allowed'
+            : 'default'
+        App.canvasElement.style.cursor = cursor
         App.currentFile.layers.forEach((layer, i) => {
           if (layer.hidden) return
           for (const [[x, y], v] of layer.data.entries()) {
@@ -901,8 +907,6 @@ const App = {
           }
           if (this.tmouse && i === App.currentFile.selectedLayer) {
             if (this.panMode) {
-              const char = this.panStart ? '*' : '+'
-              drawChar(char.charCodeAt(0), this.tmouse.x, this.tmouse.y, WHITE, BLACK)
               return
             }
             if (App.tool === 'copy' && this.toolStart) {
@@ -2242,6 +2246,7 @@ async function start() {
   App.fontIdx = 0
   await App.setFont(fontConfig[0])
   const canvas = document.createElement('canvas')
+  App.canvasElement = canvas
   canvas.style.width = '100%'
   canvas.style.height = '100%'
   canvas.style.imageRendering = 'pixelated'
