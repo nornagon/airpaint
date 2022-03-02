@@ -221,7 +221,7 @@ function renameDialog(file) {
       const borderFg = App.skin.borders
       const borderBg = App.skin.background
       const height = 1
-      const width = 20
+      const width = Math.max(20, this.text.length + 1)
       ctx.drawChar(BoxDrawing.__RD, 0, 0, borderFg, borderBg)
       for (let i = 0; i < height; i++) {
         ctx.drawChar(BoxDrawing._U_D, 0, 1+i, borderFg, borderBg)
