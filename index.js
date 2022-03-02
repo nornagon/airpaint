@@ -1050,6 +1050,19 @@ const App = {
               drawChar(BoxDrawing.LU__, hx + 1, hy + 1, WHITE, BLACK)
             } else {
               this.currentChange(drawChar)
+              if (App.tool === 'rect' && this.toolStart && App.toolOptions.showRectangleDimensions) {
+                const lx = Math.min(this.toolStart.x, this.tmouse.x)
+                const hx = Math.max(this.toolStart.x, this.tmouse.x)
+                const ly = Math.min(this.toolStart.y, this.tmouse.y)
+                const hy = Math.max(this.toolStart.y, this.tmouse.y)
+                const w = hx - lx + 1
+                const h = hy - ly + 1
+                const label = `${w}x${h}`
+                if (this.tmouse.x + 1 + label.length >= ctx.width - this.x || (this.tmouse.x < this.toolStart.x && this.tmouse.x > label.length))
+                  ctx.drawText(label, this.tmouse.x - label.length, this.tmouse.y, WHITE, BLACK)
+                else
+                  ctx.drawText(label, this.tmouse.x + 1, this.tmouse.y, WHITE, BLACK)
+              }
             }
           }
         })
@@ -1518,27 +1531,39 @@ const App = {
             for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
               ctx.drawChar(0, 1+x, 1+y, null, App.skin.background)
           },
+          children: [
+            button({
+              x: 1,
+              y: 1,
+              width: 7,
+              title() { return ' Undo  ' },
+              click() { App.undo() },
+              keydown(e) {
+                if (e.code === 'KeyZ') App.undo()
+              },
+            }),
+            button({
+              x: 1,
+              y: 2,
+              width: 7,
+              title() { return ' Redo  ' },
+              click() { App.redo() },
+              keydown(e) {
+                if (e.code === 'KeyY') App.redo()
+              },
+            }),
+            button({
+              x: 1,
+              y: 5,
+              width: 7,
+              active() { return App.toolOptions.showRectangleDimensions },
+              title() { return ' RDim  ' },
+              click() {
+                App.toolOptions.showRectangleDimensions = !App.toolOptions.showRectangleDimensions
+              }
+            }),
+          ],
         },
-        button({
-          x: 1,
-          y: 34,
-          width: 7,
-          title() { return ' Undo  ' },
-          click() { App.undo() },
-          keydown(e) {
-            if (e.code === 'KeyZ') App.undo()
-          },
-        }),
-        button({
-          x: 1,
-          y: 35,
-          width: 7,
-          title() { return ' Redo  ' },
-          click() { App.redo() },
-          keydown(e) {
-            if (e.code === 'KeyY') App.redo()
-          },
-        }),
 
         // -- Image --
         {
@@ -1736,7 +1761,7 @@ const App = {
             }
           },
           keydown(e) {
-            if (e.code === 'KeyG') App.apply.glyph = !App.apply.glyph
+            if (e.code === 'KeyG' && !e.metaKey && !e.ctrlKey) App.apply.glyph = !App.apply.glyph
           },
         },
         button({
