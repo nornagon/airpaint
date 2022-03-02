@@ -900,10 +900,11 @@ const App = {
             : 'default'
         App.canvasElement.style.cursor = cursor
         App.currentFile.layers.forEach((layer, i) => {
-          if (layer.hidden) return
-          for (const [[x, y], v] of layer.data.entries()) {
-            const { char, fg, bg } = v
-            drawChar(char ?? 0x20, +x, +y, fg, bg)
+          if (!layer.hidden) {
+            for (const [[x, y], v] of layer.data.entries()) {
+              const { char, fg, bg } = v
+              drawChar(char ?? 0x20, +x, +y, fg, bg)
+            }
           }
           if (this.tmouse && i === App.currentFile.selectedLayer) {
             if (this.panMode) {
