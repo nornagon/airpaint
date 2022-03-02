@@ -675,10 +675,16 @@ const App = {
     this.save()
   },
   save() {
+    const serializeLayers = (layers) => layers.map(l => ({...l, data: l.data._map}))
     idb.setItem('art', { files: this.files.map(f => {
       // Don't save pan info
-      const {offsetX, offsetY, layers, ...rest} = f
-      return {...rest, layers: layers.map(l => ({...l, data: l.data._map}))}
+      const {offsetX, offsetY, layers, undoStack, redoStack, ...rest} = f
+      return {
+        ...rest,
+        layers: serializeLayers(layers),
+        undoStack: undoStack.map(serializeLayers),
+        redoStack: redoStack.map(serializeLayers)
+      }
     }), selectedFile: this.selectedFile })
   },
   mergeDown(li) {
@@ -2209,20 +2215,14 @@ async function start() {
   App.init()
   const art = await idb.getItem('art')
   if (art) {
+    const deserializeLayer = (layer) => ({...layer, data: new CoordinateMap({_map: layer.data._map ?? layer.data})})
+    const deserializeLayers = (layers) => layers.map(deserializeLayer)
     App.files = art.files.map(f => (
       {
         ...f,
-        layers: f.layers.map(l => {
-          if (typeof [...l.data.keys()][0] === 'string') {
-            const data = new CoordinateMap()
-            for (const [k, v] of l.data.entries()) {
-              const [x, y] = k.split(',')
-              data.set(+x, +y, v)
-            }
-            return {...l, data}
-          }
-          return {...l, data: new CoordinateMap({_map: l.data})}
-        })
+        layers: deserializeLayers(f.layers),
+        undoStack: f.undoStack.map(deserializeLayers),
+        redoStack: f.redoStack.map(deserializeLayers),
       }
     ))
     App.selectedFile = art.selectedFile
