@@ -1939,6 +1939,7 @@ const App = {
             }
           },
           keydown(e) {
+            if (App.changing) return
             const m = /^Digit([0-9])$/.exec(e.code)
             if (m) {
               const n = +m[1]
