@@ -1058,10 +1058,10 @@ const App = {
                 const w = hx - lx + 1
                 const h = hy - ly + 1
                 const label = `${w}x${h}`
-                if (this.tmouse.x + 1 + label.length >= ctx.width - this.x || (this.tmouse.x < this.toolStart.x && this.tmouse.x > label.length))
-                  ctx.drawText(label, this.tmouse.x - label.length, this.tmouse.y, WHITE, BLACK)
+                if (this.tmouse.x + 1 + label.length - offsetX >= ctx.width - this.x || (this.tmouse.x < this.toolStart.x && this.tmouse.x - offsetX > label.length))
+                  ctx.drawText(label, this.tmouse.x - label.length - offsetX, this.tmouse.y - offsetY, WHITE, BLACK)
                 else
-                  ctx.drawText(label, this.tmouse.x + 1, this.tmouse.y, WHITE, BLACK)
+                  ctx.drawText(label, this.tmouse.x + 1 - offsetX, this.tmouse.y - offsetY, WHITE, BLACK)
               }
             }
           }
