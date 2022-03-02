@@ -34,24 +34,6 @@ function parseFontConfig(text) {
   }
   return fonts
 }
-  /*  def reachableFrom[T](from: T, links: T => Seq[T]): Set[T] = {
-    val q = mutable.Queue.empty[T]
-    val visited = mutable.Set.empty[T]
-    visited.add(from)
-    q.enqueue(from)
-    while (q.nonEmpty) {
-      val e = q.dequeue()
-      val ls = links(e)
-      for (n <- ls) {
-        if (!visited(n)) {
-          visited.add(n)
-          q.enqueue(n)
-        }
-      }
-    }
-    visited.toSet
-  }
-  */
 
 function* floodFill(origin, neighbors) {
   const q = []
@@ -95,15 +77,19 @@ function button({title, active, click, ...rest}) {
   return initUi({
     height: 1,
     drawButton(ctx) {
-      const fg = active ? active() ? App.skin.buttons.active : App.skin.buttons.inactive : App.skin.buttons.usable;
-      const bg = this.tmouse ? App.skin.buttons.highlight : App.skin.background;
+      const fg =
+        this.disabled && this.disabled()
+        ? {r: 0.3, g: 0.3, b: 0.3}
+        : active ? active() ? App.skin.buttons.active : App.skin.buttons.inactive : App.skin.buttons.usable;
+      const bg = this.tmouse && (!this.disabled || !this.disabled()) ? App.skin.buttons.highlight : App.skin.background;
       ctx.drawText(title(), 0, 0, fg, bg)
     },
     draw(ctx) {
       this.drawButton(ctx)
     },
     mousedown({button}) {
-      if (button === 0) this.click()
+      if (!this.disabled || !this.disabled())
+        if (button === 0) this.click()
     },
     click,
     active,
@@ -131,7 +117,7 @@ function numberButton({value, setValue, fg, width, align = 'right', pattern = /^
         ctx.drawText('_', align === 'right' ? this.width - 1 : Math.min(this.text.length, this.width - 1), 0, WHITE)
       } else
         ctx.drawText(
-          value().padStart(this.width, ' '),
+          align === 'right' ? value().padStart(this.width, ' ') : value().padEnd(this.width, ' '),
           0, 0,
           App.skin.buttons.usable, this.tmouse ? App.skin.buttons.highlight : App.skin.background)
     },
@@ -611,6 +597,126 @@ function colorChooser(initial, choose) {
   return dialog
 }
 
+function paletteManager() {
+  const dialog = initUi({
+    x: 18,
+    y: 0,
+    width: 56,
+    height: Math.ceil((App.palettes.length + 1) / 3) * 15 + 3,
+    captureKeys: true,
+    draw(ctx) {
+      ctx.drawBorder(0, 0, this.width, this.height, App.skin.borders, App.skin.background)
+      ctx.fill(1, 1, this.width - 2, this.height - 2, App.skin.background)
+    },
+    exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
+    keydown(e) {
+      if (e.code === 'Escape') this.exit()
+    },
+    children: App.palettes.map((p, i) => {
+      return {
+        x: (i % 3) * 18 + 2,
+        y: ((i / 3)|0) * 15 + 2,
+        children: [
+          {
+            x: 0, y: 0,
+            width: 16,
+            height: 12,
+            draw(ctx) {
+              for (let y = 0; y < 12; y++) for (let x = 0; x < 16; x++) {
+                const i = y * 16 + x
+                const color = p.colors[i] ?? {r: 0, g: 0, b: 0}
+                ctx.fill(x, y, 1, 1, color)
+              }
+            },
+            mousedown({button}) {
+              if (button === 0) {
+                // TODO: confirm if current palette has edits
+                App.palette = [...p.colors]
+                App.save()
+                dialog.exit()
+              }
+            }
+          },
+          numberButton({
+            x: 0, y: 13,
+            align: 'left',
+            value() { return p.name },
+            setValue(v) {
+              p.name = v
+              App.save()
+            },
+            pattern: /.*/,
+            width: 12,
+          }),
+          button({
+            display: i !== 0,
+            x: 13, y: 13,
+            width: 1,
+            title() { return 'S' },
+            click() {
+              // TODO: confirm if current palette's slot is not this one
+              p.colors = [...App.palette]
+              App.paletteSaveSlot = i
+              App.save()
+            }
+          }),
+          button({
+            x: 14, y: 13,
+            width: 1,
+            title() { return 'L' },
+            click() {
+              // TODO: confirm if current palette has edits
+              App.palette = [...p.colors]
+              App.paletteSaveSlot = i === 0 ? null : i
+              App.save()
+              dialog.exit()
+            }
+          }),
+          button({
+            display: i !== 0,
+            x: 15, y: 13,
+            width: 1,
+            title() { return 'X' },
+            click() {
+              if (App.paletteSaveSlot > i) App.paletteSaveSlot--
+              else if (App.paletteSaveSlot === i) App.paletteSaveSlot = null
+              App.palettes.splice(i, 1)
+              App.save()
+              dialog.exit()
+              App.ui.push(paletteManager())
+            }
+          }),
+        ]
+      }
+    }).concat([
+      button({
+        x: (App.palettes.length % 3) * 18 + 2,
+        y: ((App.palettes.length / 3)|0) * 15 + 2,
+        width: 16,
+        height: 12,
+        draw(ctx) {
+          if (this.tmouse) {
+            ctx.fill(0, 0, this.width, this.height, App.skin.buttons.highlight)
+          }
+          const fg = App.skin.buttons.usable
+          ctx.fill(5, 5, 6, 2, fg)
+          ctx.fill(7, 3, 2, 6, fg)
+        },
+        click() {
+          App.palettes.push({
+            name: 'New Palette',
+            colors: [...Array(16 * 12)].map(() => ({r: 0, g: 0, b: 0})),
+          })
+          App.save()
+          dialog.exit()
+          App.ui.push(paletteManager())
+        }
+      }),
+    ]),
+  })
+  return dialog
+}
+
 
 const DefaultForeground = { r: 0, g: 0, b: 0 }
 const DefaultBackground = { r: 1, g: 0, b: 1 }
@@ -620,7 +726,15 @@ const App = {
     newFile()
   ],
   selectedFile: 0,
-  palette: defaultPalette,
+  palette: [...defaultPalette],
+  palettes: [
+    {
+      colors: defaultPalette,
+      name: 'Default',
+    }
+  ],
+  paletteSaveSlot: null,
+  paletteChanged: false,
   get currentFile() {
     return this.files[this.selectedFile]
   },
@@ -676,16 +790,23 @@ const App = {
   },
   save() {
     const serializeLayers = (layers) => layers.map(l => ({...l, data: l.data._map}))
-    idb.setItem('art', { files: this.files.map(f => {
-      // Don't save pan info
-      const {offsetX, offsetY, layers, undoStack, redoStack, ...rest} = f
-      return {
-        ...rest,
-        layers: serializeLayers(layers),
-        undoStack: undoStack.map(serializeLayers),
-        redoStack: redoStack.map(serializeLayers)
-      }
-    }), selectedFile: this.selectedFile })
+    idb.setItem('art', {
+      files: this.files.map(f => {
+        // Don't save pan info
+        const {offsetX, offsetY, layers, undoStack, redoStack, ...rest} = f
+        return {
+          ...rest,
+          layers: serializeLayers(layers),
+          undoStack: undoStack.map(serializeLayers),
+          redoStack: redoStack.map(serializeLayers)
+        }
+      }),
+      selectedFile: this.selectedFile,
+      palette: this.palette,
+      palettes: this.palettes,
+      paletteSaveSlot: this.paletteSaveSlot,
+      paletteChanged: this.paletteChanged,
+    })
   },
   mergeDown(li) {
     if (li <= 0) return
@@ -1266,73 +1387,107 @@ const App = {
             ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, borderFg, borderBg)
             for (let i = 1 + title.length + 1 + 1; i < width + 1; i++)
               ctx.drawChar(BoxDrawing.L_R_, i, 0, borderFg, borderBg)
-          }
-        },
-        {
-          x: 1,
-          y: 20,
-          width: 16,
-          height: 12,
-          draw(ctx) {
-            for (let y = 0; y < 12; y++) for (let x = 0; x < 16; x++) {
-              const i = y * 16 + x
-              const color = App.palette[i] ?? {r: 0, g: 0, b: 0}
-              ctx.drawChar(0, x, y, null, color)
-              if (i === App.selectedPalette.fg) {
-                const cw = Math.abs(apcaContrast(WHITE, color))
-                const cb = Math.abs(apcaContrast(BLACK, color))
-                const wb = cb > cw ? BLACK : WHITE
-                ctx.drawText(i === App.selectedPalette.bg ? 'x' : 'f', x, y, wb)
-              } else if (i === App.selectedPalette.bg) {
-                const cw = Math.abs(apcaContrast(WHITE, color))
-                const cb = Math.abs(apcaContrast(BLACK, color))
-                const wb = cb > cw ? BLACK : WHITE
-                ctx.drawText('b', x, y, wb)
-              }
-            }
+            ctx.drawChar(BoxDrawing.LU_D, 13, height + 1, borderFg, borderBg)
+            ctx.drawChar(BoxDrawing._URD, 16, height + 1, borderFg, borderBg)
           },
-          mousedown({x, y, button}) {
-            this.mouseWentDownInPalette = true
-            const i = y * 16 + x
-            if (button === 0) {
-              if (App.selectedPalette.fg === i) {
-                App.ui.push(colorChooser(App.palette[i], (c) => {
-                  App.paint.fg = App.palette[i] = c
-                }))
+          children: [
+            {
+              x: 1,
+              y: 1,
+              width: 16,
+              height: 12,
+              draw(ctx) {
+                for (let y = 0; y < 12; y++) for (let x = 0; x < 16; x++) {
+                  const i = y * 16 + x
+                  const color = App.palette[i] ?? {r: 0, g: 0, b: 0}
+                  ctx.drawChar(0, x, y, null, color)
+                  if (i === App.selectedPalette.fg) {
+                    const cw = Math.abs(apcaContrast(WHITE, color))
+                    const cb = Math.abs(apcaContrast(BLACK, color))
+                    const wb = cb > cw ? BLACK : WHITE
+                    ctx.drawText(i === App.selectedPalette.bg ? 'x' : 'f', x, y, wb)
+                  } else if (i === App.selectedPalette.bg) {
+                    const cw = Math.abs(apcaContrast(WHITE, color))
+                    const cb = Math.abs(apcaContrast(BLACK, color))
+                    const wb = cb > cw ? BLACK : WHITE
+                    ctx.drawText('b', x, y, wb)
+                  }
+                }
+              },
+              mousedown({x, y, button}) {
+                this.mouseWentDownInPalette = true
+                const i = y * 16 + x
+                if (button === 0) {
+                  if (App.selectedPalette.fg === i) {
+                    App.ui.push(colorChooser(App.palette[i], (c) => {
+                      App.paint.fg = App.palette[i] = c
+                      App.paletteChanged = true
+                      App.save()
+                    }))
+                    this.mouseWentDownInPalette = false
+                  } else {
+                    App.paint.fg = App.palette[i]
+                    App.selectedPalette.fg = i
+                  }
+                } else if (button === 2) {
+                  if (App.selectedPalette.bg === i) {
+                    App.ui.push(colorChooser(App.palette[i], (c) => {
+                      App.paint.bg = App.palette[i] = c
+                      App.paletteChanged = true
+                      App.save()
+                    }))
+                    this.mouseWentDownInPalette = false
+                  } else {
+                    App.paint.bg = App.palette[i]
+                    App.selectedPalette.bg = i
+                  }
+                }
+              },
+              mousemove({x, y, buttons}) {
+                if (!this.mouseWentDownInPalette) return
+                if (buttons & 1) {
+                  App.paint.fg = App.palette[y * 16 + x]
+                  App.selectedPalette.fg = y * 16 + x
+                }
+                if (buttons & 2) {
+                  App.paint.bg = App.palette[y * 16 + x]
+                  App.selectedPalette.bg = y * 16 + x
+                }
+              },
+              mouseup() {
                 this.mouseWentDownInPalette = false
-              } else {
-                App.paint.fg = App.palette[i]
-                App.selectedPalette.fg = i
-              }
-            } else if (button === 2) {
-              if (App.selectedPalette.bg === i) {
-                App.ui.push(colorChooser(App.palette[i], (c) => {
-                  App.paint.bg = App.palette[i] = c
-                }))
+              },
+              blur() {
                 this.mouseWentDownInPalette = false
-              } else {
-                App.paint.bg = App.palette[i]
-                App.selectedPalette.bg = i
+              },
+            },
+            button({
+              x: 14,
+              y: 13,
+              width: 1,
+              disabled() { return !App.paletteChanged },
+              title() { return 'S' },
+              click() {
+                if (App.paletteSaveSlot == null) {
+                  App.palettes.push({ name: 'New Palette', colors: [...App.palette] })
+                  App.paletteSaveSlot = App.palettes.length - 1
+                } else {
+                  App.palettes[App.paletteSaveSlot].colors = [...App.palette]
+                }
+                App.paletteChanged = false
+                App.save()
               }
-            }
-          },
-          mousemove({x, y, buttons}) {
-            if (!this.mouseWentDownInPalette) return
-            if (buttons & 1) {
-              App.paint.fg = App.palette[y * 16 + x]
-              App.selectedPalette.fg = y * 16 + x
-            }
-            if (buttons & 2) {
-              App.paint.bg = App.palette[y * 16 + x]
-              App.selectedPalette.bg = y * 16 + x
-            }
-          },
-          mouseup() {
-            this.mouseWentDownInPalette = false
-          },
-          blur() {
-            this.mouseWentDownInPalette = false
-          },
+            }),
+            button({
+              x: 15,
+              y: 13,
+              width: 1,
+              title() { return '+' },
+              click() {
+                App.ui.push(paletteManager())
+              }
+            }),
+          ]
         },
 
         // -- Tools --
@@ -2249,7 +2404,11 @@ async function start() {
         redoStack: f.redoStack.map(deserializeLayers),
       }
     ))
-    App.selectedFile = art.selectedFile
+    App.selectedFile = art.selectedFile ?? 0
+    App.palettes = art.palettes ?? [{name: 'Default', colors: defaultPalette}]
+    App.palette = art.palette ?? [...defaultPalette]
+    App.paletteSaveSlot = art.paletteSaveSlot ?? null
+    App.paletteChanged = art.paletteChanged ?? null
   }
   App.fontIdx = 0
   await App.setFont(fontConfig[0])
