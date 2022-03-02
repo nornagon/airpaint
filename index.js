@@ -1454,6 +1454,7 @@ const App = {
                     file.selectedLayer = 0
                     App.files.push(file)
                     App.selectedFile = App.files.length - 1
+                    App.save()
                   }
                 } catch (e) {
                   console.error(`Error importing ${handle.name}`, e)
@@ -1477,6 +1478,7 @@ const App = {
                       file.selectedLayer = 0
                       App.files.push(file)
                       App.selectedFile = App.files.length - 1
+                      App.save()
                     }
                   } catch (e) {
                     console.error(`Error importing ${f.name}`, e)
@@ -2019,6 +2021,7 @@ const App = {
                   App.ui.push(deleteDialog(App.files[y]))
                 } else {
                   App.selectedFile = y
+                  App.save()
                 }
               }
             } else if (button === 2) {
@@ -2027,10 +2030,13 @@ const App = {
             }
           },
           keydown({code}) {
+            if (App.changing) return
             if (code === 'ArrowDown') {
               App.selectedFile = (App.selectedFile + 1) % App.files.length
+              App.save()
             } else if (code === 'ArrowUp') {
               App.selectedFile = (App.selectedFile + App.files.length - 1) % App.files.length
+              App.save()
             }
           },
         },
