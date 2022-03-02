@@ -2008,7 +2008,7 @@ const App = {
               const text = f.name.length <= 15 || hovered ? f.name : f.name.substring(0, 9) + '...' + f.name.substring(f.name.length - 3, f.name.length)
               ctx.drawText((' ' + text).padEnd(15, ' '), 0, i, fg, bg)
               if (hovered) {
-                ctx.drawText('x', 0, i, App.skin.buttons.usable)
+                ctx.drawText('X', 0, i, App.skin.buttons.usable)
               }
             })
           },
