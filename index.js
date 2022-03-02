@@ -938,23 +938,25 @@ const App = {
       },
       paint(x, y) {
         if (!this.lastPaint) return
-        bresenhamLine(this.lastPaint.x, this.lastPaint.y, x, y, (x, y) => {
-          if (App.toolOptions.joinCells && App.apply.glyph) {
-            const {x, y} = this.tmouse
-            const get = (tx, ty) => {
-              if (tx === x && ty === y && App.apply.glyph) return App.paint.char
-              else return App.currentLayer.data.get(tx,ty)?.char ?? 0
+        if (!App.currentLayer.locked) {
+          bresenhamLine(this.lastPaint.x, this.lastPaint.y, x, y, (x, y) => {
+            if (App.toolOptions.joinCells && App.apply.glyph) {
+              const {x, y} = this.tmouse
+              const get = (tx, ty) => {
+                if (tx === x && ty === y && App.apply.glyph) return App.paint.char
+                else return App.currentLayer.data.get(tx,ty)?.char ?? 0
+              }
+              for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
+                const char = this.joinedCellAt(x+dx, y+dy, get)
+                const applied = {...this.applied(x + dx, y + dy)}
+                if (App.apply.glyph) applied.char = char
+                App.currentLayer.data.set(x+dx,y+dy, applied)
+              }
+            } else {
+              App.currentLayer.data.set(x,y, this.applied(x, y))
             }
-            for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
-              const char = this.joinedCellAt(x+dx, y+dy, get)
-              const applied = {...this.applied(x + dx, y + dy)}
-              if (App.apply.glyph) applied.char = char
-              App.currentLayer.data.set(x+dx,y+dy, applied)
-            }
-          } else {
-            App.currentLayer.data.set(x,y, this.applied(x, y))
-          }
-        })
+          })
+        }
         this.lastPaint = { x, y }
       },
       mousedown({x, y, button}) {
@@ -970,19 +972,24 @@ const App = {
         }
         if (button === 0) {
           if (App.tool === 'cell') {
-            App.beginChange()
             this.lastPaint = {x, y}
-            this.paint(x, y)
+            if (!App.currentLayer.locked) {
+              App.beginChange()
+              this.paint(x, y)
+            }
           } else if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval' || App.tool === 'copy') {
             this.toolStart = { x, y }
           } else if (App.tool === 'text') {
-            App.ui.push(textToolOverlay({x: this.x + ox, y: this.y + oy, tx: x, ty: y}))
+            if (!App.currentLayer.locked)
+              App.ui.push(textToolOverlay({x: this.x + ox, y: this.y + oy, tx: x, ty: y}))
           } else if (App.tool === 'paste' || App.tool === 'fill') {
-            App.beginChange()
-            this.currentChange((char, x, y, fg, bg) => {
-              App.currentLayer.data.set(x,y, {char, fg, bg})
-            })
-            App.finishChange()
+            if (!App.currentLayer.locked) {
+              App.beginChange()
+              this.currentChange((char, x, y, fg, bg) => {
+                App.currentLayer.data.set(x,y, {char, fg, bg})
+              })
+              App.finishChange()
+            }
           }
         } else if (button === 2) {
           if (this.toolStart) {
@@ -1014,24 +1021,29 @@ const App = {
         y = y + this.offsetY
         if (button === 0) {
           this.lastPaint = null
+          if (App.currentLayer.locked && App.tool !== 'copy') {
+            this.toolStart = null
+            return
+          }
           if (App.tool === 'cell') {
             App.finishChange()
           }
           if (App.tool === 'line' || App.tool === 'rect' || App.tool === 'oval' || App.tool === 'copy') {
             if (this.tmouse && this.toolStart) {
               if (App.tool === 'copy') {
+                const copyMode = App.currentLayer.locked ? 'copy' : App.toolOptions.copyMode
                 const pasteboard = new CoordinateMap
                 const lx = Math.min(this.toolStart.x, x)
                 const hx = Math.max(this.toolStart.x, x)
                 const ly = Math.min(this.toolStart.y, y)
                 const hy = Math.max(this.toolStart.y, y)
-                if (App.toolOptions.copyMode === 'cut') App.beginChange()
+                if (copyMode === 'cut') App.beginChange()
                 for (let y = ly; y <= hy; y++) for (let x = lx; x <= hx; x++) {
                   const a = App.currentLayer.data.get(x,y)
                   if (a) pasteboard.set(x-lx, y-ly, a)
-                  if (App.toolOptions.copyMode === 'cut') App.currentLayer.data.delete(x, y)
+                  if (copyMode === 'cut') App.currentLayer.data.delete(x, y)
                 }
-                if (App.toolOptions.copyMode === 'cut') App.finishChange()
+                if (copyMode === 'cut') App.finishChange()
                 App.pasteboard = pasteboard
               } else {
                 App.beginChange()
