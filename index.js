@@ -2596,7 +2596,7 @@ async function start() {
           spriteBatch.drawRegion(tex, sx * tw, sy * th, tw, th, dx, dy, tw, th, fg)
     }
 
-    console.time('draw')
+    //console.time('draw')
     spriteBatch.begin()
     App.draw({
       width: (canvas.width / App.font.tileWidth) | 0,
@@ -2615,7 +2615,7 @@ async function start() {
       }
     })
     spriteBatch.end()
-    console.timeEnd('draw')
+    //console.timeEnd('draw')
   }
 
   window.addEventListener('mousemove', (e) => {
