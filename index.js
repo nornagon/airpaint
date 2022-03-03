@@ -1928,7 +1928,7 @@ const App = {
           title: () => ` Oval ${App.toolOptions.fillOval ? '\u00fe' : '\u00ff'}`,
           active: () => App.tool === 'oval',
           click: () => App.selectTool('oval'),
-          keydown: ({code}) => code === 'KeyO' && App.selectTool('oval'),
+          keydown: ({code, metaKey, ctrlKey}) => !metaKey && !ctrlKey && code === 'KeyO' && App.selectTool('oval'),
         }),
         button({
           x: 10,
