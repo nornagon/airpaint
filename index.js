@@ -87,9 +87,9 @@ function button({title, active, click, ...rest}) {
     draw(ctx) {
       this.drawButton(ctx)
     },
-    mousedown({button}) {
+    mousedown(e) {
       if (!this.disabled || !this.disabled())
-        if (button === 0) this.click()
+        if (e.button === 0) this.click(e)
     },
     click,
     active,
@@ -1772,13 +1772,24 @@ const App = {
             ctx.drawText(' Glyph ', 0, 0, fg, bg)
             ctx.drawChar(App.paint.char, 6, 0, WHITE)
           },
-          mousedown({button}) {
-            if (button === 0) {
+          toggle(solo) {
+            if (solo) {
+              if (App.apply.glyph && !App.apply.fg && !App.apply.bg)
+                App.apply.glyph = App.apply.fg = App.apply.bg = true
+              else {
+                App.apply.glyph = true
+                App.apply.fg = App.apply.bg = false
+              }
+            } else {
               App.apply.glyph = !App.apply.glyph
             }
           },
+          mousedown({button, shiftKey}) {
+            if (button === 0) this.toggle(shiftKey)
+          },
           keydown(e) {
-            if (e.code === 'KeyG' && !e.metaKey && !e.ctrlKey) App.apply.glyph = !App.apply.glyph
+            if (e.code === 'KeyG' && !e.metaKey && !e.ctrlKey)
+              this.toggle(e.shiftKey)
           },
         },
         button({
@@ -1787,8 +1798,22 @@ const App = {
           width: 6,
           active() { return App.apply.fg },
           title() { return ' Fore ' },
-          click() { App.apply.fg = !App.apply.fg },
-          keydown(e) { if (e.code === 'KeyF') this.click() },
+          toggle(solo) {
+            if (solo) {
+              if (App.apply.fg && !App.apply.glyph && !App.apply.bg)
+                App.apply.glyph = App.apply.fg = App.apply.bg = true
+              else {
+                App.apply.fg = true
+                App.apply.glyph = App.apply.bg = false
+              }
+            } else {
+              App.apply.fg = !App.apply.fg
+            }
+          },
+          click(e) { this.toggle(e.shiftKey) },
+          keydown(e) {
+            if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey) this.toggle(e.shiftKey)
+          },
         }),
         button({
           x: 16,
@@ -1810,8 +1835,20 @@ const App = {
           width: 6,
           title() { return ' Back ' },
           active() { return App.apply.bg },
-          click() { App.apply.bg = !App.apply.bg },
-          keydown(e) { if (e.code === 'KeyB') this.click() },
+          toggle(solo) {
+            if (solo) {
+              if (App.apply.bg && !App.apply.glyph && !App.apply.fg)
+                App.apply.glyph = App.apply.fg = App.apply.bg = true
+              else {
+                App.apply.bg = true
+                App.apply.glyph = App.apply.fg = false
+              }
+            } else {
+              App.apply.bg = !App.apply.bg
+            }
+          },
+          click(e) { this.toggle(e.shiftKey) },
+          keydown(e) { if (e.code === 'KeyB' && !e.metaKey && !e.ctrlKey) this.toggle(e.shiftKey) },
         }),
         button({
           x: 16,
