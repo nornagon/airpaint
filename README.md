@@ -4,7 +4,7 @@ AIRPaint is an ASCII art editor, (heavily) inspired by the excellent
 [REXPaint](https://www.gridsagegames.com/rexpaint/index.html). AIRPaint runs in
 the browser, so there's nothing to download and it runs on all platforms.
 
-[👉 Launch AIRPaint](https://nornagon.github.io/airpaint/)
+[👉 **Launch AIRPaint**](https://nornagon.github.io/airpaint/)
 
 ## Features
 
