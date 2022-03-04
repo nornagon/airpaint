@@ -7,6 +7,8 @@ import defaultPalette from './default-palette.js'
 import * as idb from './idb.js'
 import * as xp from './xp.js'
 
+navigator.serviceWorker.register('service-worker.js')
+
 const MAX_UNDO_STEPS = 2048
 
 const fontConfig = parseFontConfig(await fetch('fonts/_config.xt').then(t => t.text()))
@@ -807,6 +809,7 @@ const App = {
       paletteSaveSlot: this.paletteSaveSlot,
       paletteChanged: this.paletteChanged,
     })
+    navigator.storage.persist()
   },
   mergeDown(li) {
     if (li <= 0) return
