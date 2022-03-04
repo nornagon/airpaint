@@ -2251,13 +2251,21 @@ const App = {
               }
             })
           },
-          mousedown({x, y, button}) {
+          mousedown({x, y, button, shiftKey}) {
             if (button === 0) {
               if (y < App.files.length) {
                 if (x === 0) {
                   App.ui.push(deleteDialog(App.files[y]))
                 } else {
-                  App.selectedFile = y
+                  if (shiftKey) {
+                    const file = newFile()
+                    file.layers = App.currentFile.layers.map(l => ({...l, data: new CoordinateMap(l.data)}))
+                    file.name = App.currentFile.name
+                    App.files.push(file)
+                    App.selectedFile = App.files.length - 1
+                  } else {
+                    App.selectedFile = y
+                  }
                   App.save()
                 }
               }
