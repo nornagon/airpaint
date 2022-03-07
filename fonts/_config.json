@@ -1,0 +1,93 @@
+[
+  {
+    "name": "CP437 12x12",
+    "gui": {
+      "file": "cp437_12x12.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "art": {
+      "file": "cp437_12x12.png",
+      "columns": 16,
+      "rows": 16
+    }
+  },
+  {
+    "name": "CP437 14x14",
+    "gui": {
+      "file": "cp437_14x14.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "art": {
+      "file": "cp437_14x14.png",
+      "columns": 16,
+      "rows": 16
+    }
+  },
+  {
+    "name": "CP437 16x16",
+    "gui": {
+      "file": "cp437_16x16.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "art": {
+      "file": "cp437_16x16.png",
+      "columns": 16,
+      "rows": 16
+    }
+  },
+  {
+    "name": "CP437 18x18",
+    "gui": {
+      "file": "cp437_18x18.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "art": {
+      "file": "cp437_18x18.png",
+      "columns": 16,
+      "rows": 16
+    }
+  },
+  {
+    "name": "CP437 20x20",
+    "gui": {
+      "file": "cp437_20x20.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "art": {
+      "file": "cp437_20x20.png",
+      "columns": 16,
+      "rows": 16
+    }
+  },
+  {
+    "name": "CP437 8x8",
+    "gui": {
+      "file": "cp437_8x8.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "art": {
+      "file": "cp437_8x8.png",
+      "columns": 16,
+      "rows": 16
+    }
+  },
+  {
+    "name": "CP437 10x10",
+    "gui": {
+      "file": "cp437_10x10.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "art": {
+      "file": "cp437_10x10.png",
+      "columns": 16,
+      "rows": 16
+    }
+  }
+]

@@ -139,3 +139,26 @@ export function parseREXPalette(txt) {
   return colors
 }
 
+export function parseFontConfig(text) {
+  const fonts = []
+  for (const line of text.split(/\n/).map(l => l.replace(/\/\/.*/, '').trim()).filter(x => x)) {
+    const [name, guiFile, guiColumns, guiRows, artFile, artColumns, artRows, unicode, mirror, available] = line.split(/\t+/)
+    fonts.push({
+      name: name.replace(/^"|"$/g, ""),
+      gui: {
+        file: guiFile + '.png',
+        columns: +guiColumns,
+        rows: +guiRows,
+      },
+      art: {
+        file: artFile + '.png',
+        columns: +artColumns,
+        rows: +artRows,
+      },
+      unicode,
+      mirror,
+      available
+    })
+  }
+  return fonts
+}

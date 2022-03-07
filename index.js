@@ -11,31 +11,7 @@ navigator.serviceWorker.register('service-worker.js')
 
 const MAX_UNDO_STEPS = 2048
 
-const fontConfig = parseFontConfig(await fetch('fonts/_config.xt').then(t => t.text()))
-
-function parseFontConfig(text) {
-  const fonts = []
-  for (const line of text.split(/\n/).map(l => l.replace(/\/\/.*/, '').trim()).filter(x => x)) {
-    const [name, guiFile, guiColumns, guiRows, artFile, artColumns, artRows, unicode, mirror, available] = line.split(/\t+/)
-    fonts.push({
-      name,
-      gui: {
-        file: guiFile,
-        columns: +guiColumns,
-        rows: +guiRows,
-      },
-      art: {
-        file: artFile,
-        columns: +artColumns,
-        rows: +artRows,
-      },
-      unicode,
-      mirror,
-      available
-    })
-  }
-  return fonts
-}
+const fontConfig = await fetch('fonts/_config.json').then(t => t.json())
 
 function* floodFill(origin, neighbors) {
   const q = []
@@ -2295,7 +2271,7 @@ const App = {
   async setFont(font) {
     const image = await new Promise((resolve, reject) => {
       const img = new Image
-      img.src = `fonts/${font.art.file}.png`
+      img.src = `fonts/${font.art.file}`
       img.onload = () => resolve(img)
       img.onerror = reject
     })
