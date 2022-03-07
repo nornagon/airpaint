@@ -31,6 +31,7 @@ particular, some features that are currently notably missing from AIRPaint are:
 - Palette import/export
 - Sync to Google Drive / Dropbox / local server
 - Lots of keyboard shortcuts from REXPaint are missing
+- Multi-layer copy/paste
 
 ## Manual
 
