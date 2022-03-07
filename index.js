@@ -11,7 +11,7 @@ navigator.serviceWorker.register('service-worker.js')
 
 const MAX_UNDO_STEPS = 2048
 
-const fontConfig = await fetch('fonts/_config.json').then(t => t.json())
+const fontConfig = await fetch('fonts/config.json').then(t => t.json())
 
 function* floodFill(origin, neighbors) {
   const q = []

@@ -12,7 +12,7 @@ const appUrls = [
   "./default-palette.js",
   "./idb.js",
   "./xp.js",
-  "./fonts/_config.json",
+  "./fonts/config.json",
   "./fonts/cp437_8x8.png",
   "./fonts/cp437_10x10.png",
   "./fonts/cp437_12x12.png",
