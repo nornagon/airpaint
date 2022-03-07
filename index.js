@@ -307,6 +307,240 @@ function deleteDialog(file) {
   return dialog
 }
 
+function toPng(font, file) {
+  const { tileWidth, tileHeight, image } = font
+  const { layers } = file
+  
+  let lx = Infinity, hx = -Infinity, ly = Infinity, hy = -Infinity
+  for (const layer of layers)
+    for (const [x, y] of layer.data.keys()) {
+      if (x < lx) lx = x
+      if (x > hx) hx = x
+      if (y < ly) ly = y
+      if (y > hy) hy = y
+    }
+  const width = hx - lx + 1
+  const height = hy - ly + 1
+  const canvas = document.createElement('canvas')
+  canvas.width = width * tileWidth
+  canvas.height = height * tileHeight
+  const gl = canvas.getContext('webgl')
+  const prog = createProgram(gl,
+    `
+      #version 100
+      precision lowp float;
+      uniform mat4 u_projView;
+      attribute vec4 Color;
+      attribute vec2 Position;
+      attribute vec2 TexCoord;
+      varying vec4 vColor;
+      varying vec2 vTexCoord;
+      void main() {
+        vColor = Color;
+        vTexCoord = TexCoord;
+        gl_Position = u_projView * vec4(Position.xy, 0.0, 1.0);
+      }
+    `,
+    `
+      #version 100
+      precision lowp float;
+      uniform sampler2D u_texture;
+      varying vec4 vColor;
+      varying vec2 vTexCoord;
+      void main() {
+        vec4 texColor = texture2D(u_texture, vTexCoord);
+        if (texColor == vec4(0., 0., 0., 1.)) texColor.a = 0.;
+        gl_FragColor = vColor * texColor;
+      }
+    `,
+    [
+      {index: 0, name: "Position", size: 2},
+      {index: 1, name: "Color", size: 4},
+      {index: 2, name: "TexCoord", size: 2}
+    ]
+  )
+  const spriteBatch = new SpriteBatch(gl, prog)
+  const textureForImage = new WeakMap
+  function getTexture(img) {
+    if (!textureForImage.get(img))
+      textureForImage.set(img, new Texture(gl, new ImageTextureSource(img)))
+    return textureForImage.get(img)
+  }
+  gl.viewport(0, 0, canvas.width, canvas.height)
+  spriteBatch.resize(canvas.width, canvas.height)
+
+  gl.enable(gl.BLEND)
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+  gl.clearColor(0, 0, 0, 0)
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+  const isTransparent = ({r, g, b}) => r === 1 && g === 0 && b === 1
+  function drawChar(img, c, dx, dy, fg, bg, atop) {
+    const tex = getTexture(img)
+    const tw = tileWidth, th = tileHeight
+    const sx = c % 16
+    const sy = (c / 16) | 0
+    const realBg =
+      bg && isTransparent(bg)
+      ? fg && !isTransparent(fg) && atop
+        ? BLACK // fg on transparent bg needs to be black to avoid overlaying
+        : null
+      : bg;
+    if (realBg != null) {
+      const bgsx = 0xdb % 16
+      const bgsy = (0xdb / 16) | 0
+      // TODO: not all fonts might have 0xdb be the full square? maybe have
+      // to fix this one at some point.
+      spriteBatch.drawRegion(tex, bgsx * tw, bgsy * th, tw, th, dx, dy, tw, th, realBg)
+    }
+    if (fg != null)
+      if (!(fg.r === 1 && fg.g === 0 && fg.b === 1))
+        spriteBatch.drawRegion(tex, sx * tw, sy * th, tw, th, dx, dy, tw, th, fg)
+  }
+
+  spriteBatch.begin()
+  for (let li = 0; li < file.layers.length; li++) {
+    const layer = file.layers[li]
+    for (const [[x, y], {char, fg, bg}] of layer.data.entries()) {
+      const rx = x - lx
+      const ry = y - ly
+      const atop = file.layers.slice(0, li).some(l => {
+        const c = l.data.get(x, y)
+        if (!c) return false
+        return (c.fg && !isTransparent(c.fg)) || (c.bg && !isTransparent(c.bg))
+      })
+      drawChar(image, char, rx * tileWidth, ry * tileHeight, fg, bg, atop)
+    }
+  }
+  spriteBatch.end()
+  return new Promise((resolve) => canvas.toBlob(resolve))
+}
+
+function exportDialog({x, y}) {
+  async function exportAsXp(file) {
+    if (window.showSaveFilePicker) {
+      const handle = await window.showSaveFilePicker({
+        id: 'save',
+        suggestedName: file.name + '.xp',
+        types: [
+          {
+            description: 'REXPaint Files',
+            accept: {
+              'application/octet-stream+rexpaint': ['.xp'],
+            },
+          },
+        ],
+      }).catch(() => null)
+      if (handle) {
+        const writable = await handle.createWritable()
+        const rxpBlob = await xp.write({
+          version: 0xffffffff,
+          layers: file.layers,
+        })
+        const buf = await rxpBlob.arrayBuffer()
+        await writable.write(buf)
+        await writable.close()
+      }
+    } else {
+      const rxpBlob = await xp.write({
+        version: 0xffffffff,
+        layers: file.layers,
+      })
+      const url = URL.createObjectURL(rxpBlob)
+      try {
+        const a = document.createElement('a')
+        a.href = url
+        a.setAttribute('download', file.name + '.xp')
+        a.click()
+      } finally {
+        URL.revokeObjectURL(url)
+      }
+    }
+  }
+  async function exportAsPng(file) {
+    if (window.showSaveFilePicker) {
+      const handle = await window.showSaveFilePicker({
+        id: 'save',
+        suggestedName: file.name + '.png',
+        types: [
+          {
+            description: 'PNG Files',
+            accept: {
+              'image/png': ['.png'],
+            },
+          },
+        ],
+      }).catch(() => null)
+      if (handle) {
+        const writable = await handle.createWritable()
+        const blob = await toPng(App.font, file)
+        const buf = await blob.arrayBuffer()
+        await writable.write(buf)
+        await writable.close()
+      }
+    } else {
+      const blob = await toPng(App.font, file)
+      const url = URL.createObjectURL(blob)
+      try {
+        const a = document.createElement('a')
+        a.href = url
+        a.setAttribute('download', file.name + '.png')
+        a.click()
+      } finally {
+        URL.revokeObjectURL(url)
+      }
+    }
+  }
+  const dialog = initUi({
+    x,
+    y,
+    width: 11,
+    height: 7,
+    captureKeys: true,
+    exit() { App.ui.splice(App.ui.lastIndexOf(this), 1) },
+    draw(ctx) {
+      ctx.drawBorder(0, 0, this.width, this.height, App.skin.borders, App.skin.background)
+      ctx.fill(1, 1, this.width - 2, this.height - 2, App.skin.background)
+
+      const title = "Export"
+      ctx.drawText(title, 2, 0, App.skin.headers, App.skin.background)
+      ctx.drawChar(BoxDrawing.LU_D, 1, 0, App.skin.borders, App.skin.background)
+      ctx.drawChar(BoxDrawing._URD, 1 + title.length + 1, 0, App.skin.borders, App.skin.background)
+    },
+    keydown({code}) {
+      if (code === 'Escape') this.exit()
+    },
+    children: [
+      button({
+        x: 1, y: 1,
+        width: 9,
+        title() { return ' As .xp  ' },
+        click() {
+          exportAsXp(App.currentFile)
+          dialog.exit()
+        }
+      }),
+      button({
+        x: 1, y: 2,
+        width: 9,
+        title() { return ' As .png ' },
+        click() {
+          exportAsPng(App.currentFile)
+          dialog.exit()
+        }
+      }),
+      button({
+        x: 1, y: 5,
+        width: 9,
+        title() { return ' Cancel  ' },
+        click() { dialog.exit() }
+      }),
+    ]
+  })
+  return dialog
+}
+
 // https://stackoverflow.com/a/54070620
 function rgb2hsv(r,g,b) {
   let v=Math.max(r,g,b), c=v-Math.min(r,g,b);
@@ -1683,45 +1917,10 @@ const App = {
           y: 44,
           width: 7,
           title() { return ' Export' },
-          async click() {
-            if (window.showSaveFilePicker) {
-              const handle = await window.showSaveFilePicker({
-                id: 'save',
-                suggestedName: App.files[App.selectedFile].name + '.xp',
-                types: [
-                  {
-                    description: 'REXPaint Files',
-                    accept: {
-                      'application/octet-stream+rexpaint': ['.xp'],
-                    },
-                  },
-                ],
-              }).catch(() => null)
-              if (handle) {
-                const writable = await handle.createWritable()
-                const rxpBlob = await xp.write({
-                  version: 0xffffffff,
-                  layers: App.currentFile.layers,
-                })
-                const buf = await rxpBlob.arrayBuffer()
-                await writable.write(buf)
-                await writable.close()
-              }
-            } else {
-              const a = document.createElement('a')
-              const rxpBlob = await xp.write({
-                version: 0xffffffff,
-                layers: App.currentFile.layers,
-              })
-              const url = URL.createObjectURL(rxpBlob)
-              try {
-                a.href = url
-                a.setAttribute('download', App.files[App.selectedFile].name + '.xp')
-                a.click()
-              } finally {
-                URL.revokeObjectURL(url)
-              }
-            }
+          click() {
+            const ox = this._px + this.x
+            const oy = this._py + this.y
+            App.ui.push(exportDialog({x: ox - 1, y: oy}))
           },
         }),
 

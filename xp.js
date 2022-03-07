@@ -52,6 +52,8 @@ export function write({version, layers}) {
   e.appendUint32(layers.length)
   for (const layer of layers) {
     // TODO: allow negative x/y and offset?
+    // TODO: how does rexpaint handle different width/heights for different
+    // layers?
     let width = 0, height = 0
     for (const [x, y] of layer.data.keys()) {
       if (x + 1 > width) width = x + 1
