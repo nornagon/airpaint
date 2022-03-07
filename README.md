@@ -9,11 +9,12 @@ the browser, so there's nothing to download and it runs on all platforms.
 ## Features
 
 - Unlimited canvas size
+- Automatically saves all work
+- Long undo history
 - Draw lines, rectangles and ellipses
 - Edit glyph, foreground and background separately
 - Unlimited layers
 - Copy/paste
-- Undo/redo
 - Export and import REXPaint files (.xp)
 - Palette editing and management tools
 
@@ -29,3 +30,4 @@ particular, some features that are currently notably missing from AIRPaint are:
 - Export to more formats (PNG, TXT)
 - Palette import/export
 - Sync to Google Drive / Dropbox / local server
+- Lots of keyboard shortcuts from REXPaint are missing

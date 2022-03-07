@@ -181,7 +181,7 @@ function renameDialog(file) {
     text: file.name,
     draw(ctx) {
       const title = 'Enter Name'
-      ctx.drawText(title, 2, 0, WHITE)
+      ctx.drawText(title, 2, 0, App.skin.headers, App.skin.background)
       const borderFg = App.skin.borders
       const borderBg = App.skin.background
       const height = 1
@@ -1059,11 +1059,11 @@ const App = {
       },
       applied(x, y, p) {
         if (!p) p = App.paint
-        const paint = { ...(App.currentLayer.data.get(x,y) ?? {}) }
-        if (App.apply.glyph) paint.char = p.char
-        if (App.apply.fg) paint.fg = p.fg
-        if (App.apply.bg) paint.bg = p.bg
-        return paint
+        let { char = 0, fg = DefaultForeground, bg = DefaultBackground } = App.currentLayer.data.get(x,y) ?? {}
+        if (App.apply.glyph) char = p.char
+        if (App.apply.fg) fg = p.fg
+        if (App.apply.bg) bg = p.bg
+        return { char, fg, bg }
       },
       paint(x, y) {
         if (!this.lastPaint) return
@@ -1552,7 +1552,10 @@ const App = {
               title() { return ' RDim  ' },
               click() {
                 App.toolOptions.showRectangleDimensions = !App.toolOptions.showRectangleDimensions
-              }
+              },
+              keydown({code, ctrlKey}) {
+                if (code === 'KeyD' && ctrlKey) this.click()
+              },
             }),
             button({
               x: 1,
@@ -1560,7 +1563,10 @@ const App = {
               width: 7,
               active() { return App.showGrid },
               title() { return ' Grid  ' },
-              click() { App.showGrid = !App.showGrid }
+              click() { App.showGrid = !App.showGrid },
+              keydown({code, ctrlKey}) {
+                if (code === 'KeyG' && ctrlKey) this.click()
+              },
             }),
           ],
         },
