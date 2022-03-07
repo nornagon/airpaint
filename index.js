@@ -900,15 +900,14 @@ const App = {
         function bdt(c) { return isSingleBoxDrawingChar(c) ? 1 : isDoubleBoxDrawingChar(c) ? 2 : 0 }
         const c = get(x, y)
         const boxDrawingType = bdt(c)
+        if (boxDrawingType === 0) return null
         const connectLeft = bdt(get(x-1,y)) === boxDrawingType
         const connectRight = bdt(get(x+1,y)) === boxDrawingType
         const connectUp = bdt(get(x,y-1)) === boxDrawingType
         const connectDown = bdt(get(x,y+1)) === boxDrawingType
-        if (!(connectLeft || connectRight || connectUp || connectDown)) return c
+        if (!(connectLeft || connectRight || connectUp || connectDown)) return null
         const char =
-          boxDrawingType === 0
-          ? c
-          : boxDrawingType === 1
+          boxDrawingType === 1
             ? boxDrawingChar(connectLeft, connectUp, connectRight, connectDown)
             : boxDrawingDoubleChar(connectLeft, connectUp, connectRight, connectDown)
         return char
@@ -928,10 +927,13 @@ const App = {
               if (tx === x && ty === y && App.apply.glyph) return App.paint.char
               else return App.currentLayer.data.get(tx,ty)?.char ?? 0
             }
-            const {fg, bg, char: appliedChar} = this.applied(x, y)
-            for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
-              const char = App.apply.glyph ? this.joinedCellAt(x+dx, y+dy, get) : appliedChar
-              f(char, x+dx, y+dy, fg, bg)
+            const { char, fg, bg } = this.applied(x, y)
+            f(this.joinedCellAt(x, y, get) ?? char, x, y, fg, bg)
+            if (App.apply.glyph) {
+              for (const [dx, dy] of [[-1,0],[0,-1],[1,0],[0,1]]) {
+                const char = this.joinedCellAt(x + dx, y + dy, get)
+                if (char) f(char, x+dx, y+dy, fg, bg)
+              }
             }
           } else {
             const { char = 0, fg, bg } = this.applied(this.tmouse.x, this.tmouse.y)
@@ -1092,16 +1094,18 @@ const App = {
         if (!App.currentLayer.locked) {
           bresenhamLine(this.lastPaint.x, this.lastPaint.y, x, y, (x, y) => {
             if (App.toolOptions.joinCells && App.apply.glyph) {
-              const {x, y} = this.tmouse
               const get = (tx, ty) => {
                 if (tx === x && ty === y && App.apply.glyph) return App.paint.char
                 else return App.currentLayer.data.get(tx,ty)?.char ?? 0
               }
-              for (const [dx, dy] of App.apply.glyph ? [[0,0],[-1,0],[0,-1],[1,0],[0,1]] : [[0,0]]) {
-                const char = this.joinedCellAt(x+dx, y+dy, get)
-                const applied = {...this.applied(x + dx, y + dy)}
-                if (App.apply.glyph) applied.char = char
-                App.currentLayer.data.set(x+dx,y+dy, applied)
+              const { char, fg, bg } = this.applied(x, y)
+              const c = this.joinedCellAt(x, y, get) ?? char
+              App.currentLayer.data.set(x, y, { char: c, fg, bg })
+              if (App.apply.glyph) {
+                for (const [dx, dy] of [[-1,0],[0,-1],[1,0],[0,1]]) {
+                  const char = this.joinedCellAt(x + dx, y + dy, get)
+                  if (char) App.currentLayer.data.set(x+dx, y+dy, { char, fg, bg })
+                }
               }
             } else {
               App.currentLayer.data.set(x,y, this.applied(x, y))
