@@ -22,11 +22,12 @@ export async function read(blob) {
       const br = d.getUint8(offset++, true)
       const bg = d.getUint8(offset++, true)
       const bb = d.getUint8(offset++, true)
-      data.set(x, y, {
-        char,
-        fg: {r: fr/255, g: fg/255, b: fb/255},
-        bg: {r: br/255, g: bg/255, b: bb/255},
-      })
+      if (!(fr === 0 && fg === 0 && fb === 0 && br === 255 && bg === 0 && bb === 255))
+        data.set(x, y, {
+          char,
+          fg: {r: fr/255, g: fg/255, b: fb/255},
+          bg: {r: br/255, g: bg/255, b: bb/255},
+        })
     }
     layers.push(layer)
   }
@@ -62,7 +63,7 @@ export function write({version, layers}) {
       let { char, fg, bg } = layer.data.get(x, y) ?? {}
       if (char == null) char = 0
       if (fg == null) fg = {r: 0, g: 0, b: 0}
-      if (bg == null) bg = {r: 0, g: 0, b: 0}
+      if (bg == null) bg = {r: 1, g: 0, b: 1}
       e.appendUint32(char)
       e.appendByte((fg.r * 255) | 0)
       e.appendByte((fg.g * 255) | 0)
