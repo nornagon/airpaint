@@ -1,4 +1,4 @@
-<img src="images/logo.png" alt="AIRPaint logo" width=336 />
+<a href="https://nornagon.github.io/airpaint/"><img src="images/logo.png" alt="AIRPaint logo" width=336 /></a>
 
 AIRPaint is an ASCII art editor, (heavily) inspired by the excellent
 [REXPaint](https://www.gridsagegames.com/rexpaint/index.html). AIRPaint runs in
