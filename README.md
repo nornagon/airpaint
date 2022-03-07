@@ -1,4 +1,4 @@
-# AIRPaint
+![AIRPaint logo](images/logo.png =336x60)
 
 AIRPaint is an ASCII art editor, (heavily) inspired by the excellent
 [REXPaint](https://www.gridsagegames.com/rexpaint/index.html). AIRPaint runs in
