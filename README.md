@@ -1,4 +1,4 @@
-![AIRPaint logo](images/logo.png =336x60)
+<img src="images/logo.png" alt="AIRPaint logo" width=336 />
 
 AIRPaint is an ASCII art editor, (heavily) inspired by the excellent
 [REXPaint](https://www.gridsagegames.com/rexpaint/index.html). AIRPaint runs in
@@ -31,3 +31,9 @@ particular, some features that are currently notably missing from AIRPaint are:
 - Palette import/export
 - Sync to Google Drive / Dropbox / local server
 - Lots of keyboard shortcuts from REXPaint are missing
+
+## Manual
+
+Until AIRPaint gets its own manual, the best guide to AIRPaint is [REXPaint's
+manual](https://www.gridsagegames.com/rexpaint/manual.txt). Most things work
+similarly in AIRPaint to how they do in REXPaint.
