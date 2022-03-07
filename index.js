@@ -1604,6 +1604,9 @@ const App = {
             App.selectedFile = App.files.length - 1
             App.save()
           },
+          keydown({code, metaKey, ctrlKey, shiftKey}) {
+            if (code === 'KeyN' && !metaKey && ctrlKey && !shiftKey) this.click()
+          }
         }),
         button({
           x: 1,
