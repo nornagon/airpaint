@@ -2217,7 +2217,8 @@ const App = {
               ctx.drawText(`${['-','-','-'].map(c => c.padStart(3, ' ')).join(' ')}`, 6, 1, App.skin.headers)
               ctx.drawText(`${['-','-','-'].map(c => c.padStart(3, ' ')).join(' ')}`, 6, 2, App.skin.headers)
             }
-            ctx.drawText(`Mem:${(performance.memory.usedJSHeapSize/1024/1024)|0}M`, 1, 3, {r: 0.5,g:0.5,b:0.5})
+            if (performance.memory)
+              ctx.drawText(`Mem:${(performance.memory.usedJSHeapSize/1024/1024)|0}M`, 1, 3, {r: 0.5,g:0.5,b:0.5})
             if (canvas.tmouse) {
               const coords = `${canvas.tmouse.x},${canvas.tmouse.y}`
               ctx.drawText(coords, 17 - coords.length, 3, App.skin.headers)
