@@ -594,21 +594,38 @@ function colorChooser(initial, choose) {
           ctx.drawText('/', selectedS-1, selectedV+1, wb)
           ctx.drawText('\\', selectedS+1, selectedV+1, wb)
         },
-        mousedown({x, y, button}) {
+        mouseup({x, y, button}) {
           if (button === 0) {
-            if (((s*this.width)|0) === x && (((1 - v) * this.height)|0) === y) {
+            if (!this.moved && ((s*this.width)|0) === x && (((1 - v) * this.height)|0) === y) {
               const [r, g, b] = hsv2rgb(h, s, v)
               choose({r, g, b})
               dialog.exit()
+              return
             }
             s = x / (this.width - 1)
             v = 1 - y / (this.height - 1)
           }
         },
+        mousedown({button, x, y}) {
+          if (button === 0) {
+            const cx = ((s*this.width)|0)
+            const cy = (((1 - v) * this.height)|0)
+            if (x !== cx || y !== cy) {
+              this.moved = true
+              s = x / (this.width - 1)
+              v = 1 - y / (this.height - 1)
+            }
+          }
+        },
         mousemove({x, y, buttons}) {
           if (buttons & 1) {
-            s = x / (this.width - 1)
-            v = 1 - y / (this.height - 1)
+            const cx = ((s*this.width)|0)
+            const cy = (((1 - v) * this.height)|0)
+            if (x !== cx || y !== cy) {
+              s = x / (this.width - 1)
+              v = 1 - y / (this.height - 1)
+              this.moved = true
+            }
           }
         },
       },
@@ -2855,6 +2872,9 @@ async function start() {
       y: e.clientY,
       button: e.button,
       buttons: e.buttons,
+      shiftKey: e.shiftKey,
+      ctrlKey: e.ctrlKey,
+      metaKey: e.metaKey,
       stopPropagation() {
         this.propagationStopped = true
       }
