@@ -1054,8 +1054,8 @@ const App = {
     return this.mouse ? { x: (this.mouse.x / App.font.tileWidth)|0, y: (this.mouse.y / App.font.tileHeight)|0 } : null;
   },
   paint: {
-    char: 0,
-    fg: DefaultForeground,
+    char: 0xc5,
+    fg: { r: 1, g: 1, b: 1 },
     bg: DefaultBackground,
   },
   selectedPalette: {
