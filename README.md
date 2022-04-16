@@ -20,14 +20,14 @@ the browser, so there's nothing to download and it runs on all platforms.
 
 ### Planned features
 
-There are [several planned enhancements](/nornagon/airpaint/labels/enhancement).
+There are [several planned enhancements](https://github.com/nornagon/airpaint/labels/enhancement).
 Generally, AIRPaint aims roughly for feature parity with REXPaint, with
 modifications to account for the fact that AIRPaint runs in the browser. In
 particular, some features that are currently notably missing from AIRPaint are:
 
 - Custom fonts
 - Extended fonts (>256 glyphs)
-- Export to more formats (PNG, TXT)
+- Export to more formats (CSV, TXT)
 - Palette import/export
 - Sync to Google Drive / Dropbox / local server
 - Lots of keyboard shortcuts from REXPaint are missing
