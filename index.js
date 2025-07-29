@@ -38,6 +38,71 @@ const utf8Config = await fetch("fonts/_utf8.txt")
     ),
   )
 
+class CanvasFontTextureSource {
+  constructor(fontName, chars) {
+    this.fontName = fontName
+    this.chars = chars
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+    ctx.font = fontName
+    const metrics = ctx.measureText("0")
+    const tileWidth = Math.ceil(metrics.width)
+    const tileHeight = Math.ceil(
+      metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent,
+    )
+  }
+
+  get width() {
+    return this.metrics.width
+  }
+  get height() {
+    return this.height
+  }
+
+  upload(gl) {
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      this.image,
+    )
+    this.image = null // release
+  }
+}
+
+class ImageFontTextureSource extends ImageTextureSource {
+  constructor(image, { tileWidth, tileHeight }) {
+    super(image)
+    this.tileWidth = tileWidth
+    this.tileHeight = tileHeight
+  }
+
+  getCoords(c) {
+    const { tileWidth, tileHeight } = this
+    const sx = c % 16
+    const sy = (c / 16) | 0
+    return {
+      x: sx * tileWidth,
+      y: sy * tileHeight,
+      w: tileWidth,
+      h: tileHeight,
+    }
+  }
+}
+
+class FontTexture extends Texture {
+  getCoords(c) {
+    return this.textureSource.getCoords(c)
+  }
+
+  draw(spriteBatch, c, dx, dy, color) {
+    const { x, y, w, h } = this.getCoords(c)
+    spriteBatch.drawRegion(this, x, y, w, h, dx, dy, w, h, color)
+  }
+}
+
 function makeFont(fontName) {
   const canvas = document.createElement("canvas")
   const ctx = canvas.getContext("2d")
@@ -529,10 +594,18 @@ function toPng(font, file) {
   )
   const spriteBatch = new SpriteBatch(gl, prog)
   const textureForImage = new WeakMap()
-  function getTexture(img) {
-    if (!textureForImage.get(img))
-      textureForImage.set(img, new Texture(gl, new ImageTextureSource(img)))
-    return textureForImage.get(img)
+  function getTexture(font) {
+    if (!textureForImage.get(font)) {
+      const { image, tileWidth, tileHeight } = font
+      textureForImage.set(
+        font,
+        new FontTexture(
+          gl,
+          new ImageFontTextureSource(image, { tileWidth, tileHeight }),
+        ),
+      )
+    }
+    return textureForImage.get(font)
   }
   gl.viewport(0, 0, canvas.width, canvas.height)
   spriteBatch.resize(canvas.width, canvas.height)
@@ -544,12 +617,8 @@ function toPng(font, file) {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
   const isTransparent = ({ r, g, b }) => r === 1 && g === 0 && b === 1
-  function drawChar(img, c, dx, dy, fg, bg, atop) {
-    const tex = getTexture(img)
-    const tw = tileWidth,
-      th = tileHeight
-    const sx = c % 16
-    const sy = (c / 16) | 0
+  function drawChar(font, c, dx, dy, fg, bg, atop) {
+    const tex = getTexture(font)
     const realBg =
       bg && isTransparent(bg)
         ? fg && !isTransparent(fg) && atop
@@ -557,37 +626,13 @@ function toPng(font, file) {
           : null
         : bg
     if (realBg != null) {
-      const bgsx = 0xdb % 16
-      const bgsy = (0xdb / 16) | 0
       // TODO: not all fonts might have 0xdb be the full square? maybe have
       // to fix this one at some point.
-      spriteBatch.drawRegion(
-        tex,
-        bgsx * tw,
-        bgsy * th,
-        tw,
-        th,
-        dx,
-        dy,
-        tw,
-        th,
-        realBg,
-      )
+      tex.draw(spriteBatch, 0xdb, dx, dy, realBg)
     }
     if (fg != null)
       if (!(fg.r === 1 && fg.g === 0 && fg.b === 1))
-        spriteBatch.drawRegion(
-          tex,
-          sx * tw,
-          sy * th,
-          tw,
-          th,
-          dx,
-          dy,
-          tw,
-          th,
-          fg,
-        )
+        tex.draw(spriteBatch, c, dx, dy, fg)
   }
 
   spriteBatch.begin()
@@ -3702,7 +3747,8 @@ async function start() {
     App.paletteChanged = art.paletteChanged ?? null
   }
   App.fontIdx = 0
-  await App.setFont(fontConfig[0])
+  // await App.setFont(fontConfig[0])
+  App.font = makeFont("10pt JetBrains Mono")
   const canvas = document.createElement("canvas")
   App.canvasElement = canvas
   canvas.style.width = "100%"

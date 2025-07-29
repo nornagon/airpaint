@@ -104,13 +104,8 @@ class VertexArray {
 export class ImageTextureSource {
   constructor(image) {
     this.image = image
-  }
-
-  get width() {
-    return this.image.width
-  }
-  get height() {
-    return this.image.height
+    this.width = image.width
+    this.height = image.height
   }
 
   upload(gl) {
@@ -129,10 +124,16 @@ export class ImageTextureSource {
 export class Texture {
   constructor(gl, textureSource) {
     this.gl = gl
-    this.width = textureSource.width
-    this.height = textureSource.height
     this.textureSource = textureSource
     this.id = this.upload()
+  }
+
+  get width() {
+    return this.textureSource.width
+  }
+
+  get height() {
+    return this.textureSource.height
   }
 
   upload() {
@@ -152,7 +153,9 @@ export class Texture {
   }
 
   bind() {
-    this.gl.bindTexture(this.gl.TEXTURE_2D, this.id)
+    const { gl } = this
+    gl.bindTexture(gl.TEXTURE_2D, this.id)
+    this.textureSource.willDraw?.(gl)
   }
 
   dispose() {
