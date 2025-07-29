@@ -50,8 +50,6 @@ function makeFont(fontName) {
   canvas.width = tileWidth * 16
   canvas.height = tileHeight * 16
   ctx.font = fontName
-  ctx.fillStyle = "black"
-  ctx.fillRect(0, 0, 256 * 16, 16 * 16)
   ctx.fillStyle = "white"
   for (let i = 0; i < 256; i++) {
     const c = String.fromCharCode(utf8Config[i] ?? i)
@@ -238,14 +236,32 @@ function numberButton({
 }
 
 function textToolOverlay({ x, y, tx, ty }) {
-  // TODO: hidden textarea...?
-  return {
+  const textarea = document.createElement("textarea")
+  document.body.appendChild(textarea)
+  textarea.style.position = "absolute"
+  textarea.style.left = `0px`
+  textarea.style.top = `0px`
+  textarea.style.width = "1px"
+  textarea.style.height = "1px"
+  textarea.setAttribute("wrap", "off")
+  textarea.style.opacity = "0"
+  textarea.style.pointerEvents = "none"
+  textarea.oninput = () => {
+    obj.text = textarea.value
+  }
+  setTimeout(() => {
+    textarea.focus()
+  })
+  const obj = {
     x,
     y,
     height: 1,
     text: "",
     draw(ctx) {
+      const { selectionStart, selectionEnd } = textarea
+      const cursor = selectionStart === selectionEnd ? selectionStart : -1
       const lines = this.text.split("\n")
+      let bytes = 0
       lines.forEach((line, y) => {
         for (let i = 0; i < line.length; i++) {
           const {
@@ -253,25 +269,32 @@ function textToolOverlay({ x, y, tx, ty }) {
             fg,
             bg,
           } = this.applied(tx + i, ty + y, line.charCodeAt(i))
-          ctx.drawChar(char, i, y, fg, bg)
+          const bgWithSelection =
+            selectionStart !== selectionEnd
+              ? i >= selectionStart && i < selectionEnd
+                ? App.skin.background
+                : bg
+              : bg
+          ctx.drawChar(char, i, y, fg, bgWithSelection)
+          if (bytes === cursor) ctx.drawText("_", i, y, WHITE, BLACK)
+          bytes += 1
         }
-        if (y === lines.length - 1)
-          ctx.drawText("_", line.length, y, WHITE, BLACK)
+        if (bytes === cursor) ctx.drawText("_", line.length, y, WHITE, BLACK)
+        bytes += 1
       })
     },
     captureKeys: true,
     exit() {
+      textarea.remove()
       App.ui.splice(App.ui.lastIndexOf(this), 1)
     },
     keydown(e) {
+      textarea.focus()
       if (e.code === "Escape") this.exit()
-      if (e.code === "Backspace")
-        this.text = this.text.substring(0, this.text.length - 1)
     },
     keypress(e) {
       if (e.key === "Enter") {
         if (e.ctrlKey || e.shiftKey) {
-          this.text += "\n"
           return
         }
         App.beginChange()
@@ -289,7 +312,6 @@ function textToolOverlay({ x, y, tx, ty }) {
         this.exit()
         return
       }
-      this.text += e.key
     },
     applied(x, y, c) {
       const paint = {
@@ -304,6 +326,7 @@ function textToolOverlay({ x, y, tx, ty }) {
       return paint
     },
   }
+  return obj
 }
 
 function renameDialog(file) {
