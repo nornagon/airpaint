@@ -1,3 +1,4 @@
+// prettier-ignore
 const defaultPalette = [
   "400000", "660000", "8c0000", "b20000", "d90000", "ff0000", "ff3333", "ff6666", "002040", "003366", "00468c", "0059b2", "006cd9", "0080ff", "3399ff", "66b2ff",
   "401000", "661a00", "8c2300", "b22d00", "d93600", "ff4000", "ff6633", "ff8c66", "000040", "000066", "00008c", "0000b2", "0000d9", "0000ff", "3333ff", "6666ff",
@@ -16,7 +17,7 @@ const defaultPalette = [
   const r = ((n & 0xff0000) >> 16) / 255
   const g = ((n & 0x00ff00) >> 8) / 255
   const b = ((n & 0x0000ff) >> 0) / 255
-  return {r, g, b}
+  return { r, g, b }
 })
 
 export default defaultPalette

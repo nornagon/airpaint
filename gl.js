@@ -2,8 +2,7 @@ function createShader(gl, type, source) {
   const shader = gl.createShader(type)
   gl.shaderSource(shader, source)
   gl.compileShader(shader)
-  if (gl.getShaderParameter(shader, gl.COMPILE_STATUS))
-    return shader
+  if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return shader
   throw new Error(`failed to compile shader: ${gl.getShaderInfoLog(shader)}`)
 }
 
@@ -14,7 +13,7 @@ export function createProgram(gl, vsource, fsource, shaderAttribs) {
   const vs = createShader(gl, gl.VERTEX_SHADER, vsource)
   const fs = createShader(gl, gl.FRAGMENT_SHADER, fsource)
   const prog = gl.createProgram()
-  for (const {index, name} of shaderAttribs) {
+  for (const { index, name } of shaderAttribs) {
     gl.bindAttribLocation(prog, index, name)
   }
   gl.attachShader(prog, vs)
@@ -23,21 +22,21 @@ export function createProgram(gl, vsource, fsource, shaderAttribs) {
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
     throw new Error(`failed to link program: ${gl.getProgramInfoLog(prog)}`)
 
-  const uniforms = new Map
+  const uniforms = new Map()
   const numUniforms = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS)
 
   for (let i = 0; i < numUniforms; i++) {
-    const {name} = gl.getActiveUniform(prog, i)
+    const { name } = gl.getActiveUniform(prog, i)
     const id = gl.getUniformLocation(prog, name)
     uniforms.set(name, id)
   }
 
-  const attribs = new Map
+  const attribs = new Map()
   const numAttributes = gl.getProgramParameter(prog, gl.ACTIVE_ATTRIBUTES)
   for (let i = 0; i < numAttributes; i++) {
-    const {name, size, type} = gl.getActiveAttrib(prog, i)
+    const { name, size, type } = gl.getActiveAttrib(prog, i)
     const location = gl.getAttribLocation(prog, name)
-    attribs.set(name, {name, size, type, location})
+    attribs.set(name, { name, size, type, location })
   }
 
   return new ShaderProgram(gl, prog, uniforms, attribs, shaderAttribs)
@@ -51,15 +50,16 @@ class ShaderProgram {
     this.attribs = attribs
     this.shaderAttribs = shaderAttribs // TODO redundant with attribs?
   }
-  use() { this.gl.useProgram(this.program) }
+  use() {
+    this.gl.useProgram(this.program)
+  }
 }
-
 
 class VertexArray {
   constructor(gl, count, attributes) {
     this.gl = gl
     this.attributes = attributes
-    const stride = attributes.map(a => a.size).reduce((m, o) => m + o, 0)
+    const stride = attributes.map((a) => a.size).reduce((m, o) => m + o, 0)
     this.buffer = new Float32Array(count * stride)
     this._bufPos = 0
     this.stride = stride
@@ -68,19 +68,27 @@ class VertexArray {
   put(...xs) {
     //this.buffer.set(xs, this._bufPos)
     //this._bufPos += xs.length
-    for (const x of xs)
-      this.buffer[this._bufPos++] = x
+    for (const x of xs) this.buffer[this._bufPos++] = x
   }
-  flip() { this._bufPos = 0 }
+  flip() {
+    this._bufPos = 0
+  }
   bind() {
-    const {gl} = this
+    const { gl } = this
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferId)
     gl.bufferData(gl.ARRAY_BUFFER, this.buffer, gl.STREAM_DRAW)
     let offset = 0
     const sizeOfFloatInBytes = 4
-    this.attributes.forEach(({index, size}) => {
+    this.attributes.forEach(({ index, size }) => {
       gl.enableVertexAttribArray(index)
-      gl.vertexAttribPointer(index, size, gl.FLOAT, false, this.stride * 4, offset * sizeOfFloatInBytes)
+      gl.vertexAttribPointer(
+        index,
+        size,
+        gl.FLOAT,
+        false,
+        this.stride * 4,
+        offset * sizeOfFloatInBytes,
+      )
       offset += size
     })
     gl.bindBuffer(gl.ARRAY_BUFFER, null)
@@ -89,7 +97,7 @@ class VertexArray {
     this.gl.drawArrays(geom, first, count)
   }
   unbind() {
-    this.attributes.forEach(a => this.gl.disableVertexAttribArray(a.index))
+    this.attributes.forEach((a) => this.gl.disableVertexAttribArray(a.index))
   }
 }
 
@@ -98,11 +106,22 @@ export class ImageTextureSource {
     this.image = image
   }
 
-  get width() { return this.image.width }
-  get height() { return this.image.height }
+  get width() {
+    return this.image.width
+  }
+  get height() {
+    return this.image.height
+  }
 
   upload(gl) {
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.image)
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      this.image,
+    )
     this.image = null // release
   }
 }
@@ -117,7 +136,7 @@ export class Texture {
   }
 
   upload() {
-    const {gl} = this
+    const { gl } = this
     const id = gl.createTexture()
     const previouslyBound = gl.getParameter(gl.TEXTURE_BINDING_2D)
     gl.bindTexture(gl.TEXTURE_2D, id)
@@ -132,9 +151,13 @@ export class Texture {
     return id
   }
 
-  bind() { this.gl.bindTexture(this.gl.TEXTURE_2D, this.id) }
+  bind() {
+    this.gl.bindTexture(this.gl.TEXTURE_2D, this.id)
+  }
 
-  dispose() { this.gl.deleteTextures(this.id) }
+  dispose() {
+    this.gl.deleteTextures(this.id)
+  }
 }
 
 export class SpriteBatch {
@@ -150,7 +173,7 @@ export class SpriteBatch {
   }
 
   resize(width, height) {
-    const {gl} = this
+    const { gl } = this
     this.program.use()
     const left = 0
     const right = width
@@ -162,10 +185,22 @@ export class SpriteBatch {
     const ty = -(top + bottom) / (top - bottom)
     const tz = -(zFar + zNear) / (zFar - zNear)
     const projMat = [
-      2 / (right - left), 0, 0, 0,
-      0, 2 / (top - bottom), 0, 0,
-      0, 0, -2 / (zFar - zNear), 0,
-      tx, ty, tz, 1
+      2 / (right - left),
+      0,
+      0,
+      0,
+      0,
+      2 / (top - bottom),
+      0,
+      0,
+      0,
+      0,
+      -2 / (zFar - zNear),
+      0,
+      tx,
+      ty,
+      tz,
+      1,
     ]
     gl.uniformMatrix4fv(this.program.uniforms.get("u_projView"), false, projMat)
     gl.uniform1i(this.program.uniforms.get("u_texture"), 0)
@@ -190,18 +225,7 @@ export class SpriteBatch {
     this.draw(tex, dstX, dstY, dstWidth, dstHeight, u, v, u2, v2, color)
   }
 
-  draw(
-    tex,
-    x,
-    y,
-    width,
-    height,
-    u,
-    v,
-    u2,
-    v2,
-    color,
-  ) {
+  draw(tex, x, y, width, height, u, v, u2, v2, color) {
     this.checkFlush(tex)
 
     const x1 = x
@@ -216,7 +240,7 @@ export class SpriteBatch {
     const x4 = x
     const y4 = y + height
 
-    const {r, g, b, a = 1} = color
+    const { r, g, b, a = 1 } = color
 
     this.vertex(x1, y1, r, g, b, a, u, v)
     this.vertex(x2, y2, r, g, b, a, u2, v)
@@ -262,8 +286,7 @@ export class SpriteBatch {
   }
 
   render() {
-    if (this.texture != null)
-      this.texture.bind()
+    if (this.texture != null) this.texture.bind()
     this.data.bind()
     this.data.draw(this.gl.TRIANGLES, 0, this.idx)
     this.data.unbind()

@@ -72,7 +72,11 @@ export function boxDrawingDoubleChar(cl, cu, cr, cd) {
   return BoxDrawingDoubleB[(cl << 3) | (cu << 2) | (cr << 1) | cd]
 }
 export function isSingleBoxDrawingChar(c) {
-  return (c >= 0xbf && c <= 0xc5) || (c >= 0xb3 && c <= 0xb4) || (c >= 0xd9 && c <= 0xda)
+  return (
+    (c >= 0xbf && c <= 0xc5) ||
+    (c >= 0xb3 && c <= 0xb4) ||
+    (c >= 0xd9 && c <= 0xda)
+  )
 }
 export function isDoubleBoxDrawingChar(c) {
   return (c >= 0xb9 && c <= 0xbc) || (c >= 0xc8 && c <= 0xce)

@@ -1,8 +1,10 @@
 export class CoordinateMap {
-  _map = new Map
+  _map = new Map()
   constructor(other) {
     if (other)
-      this._map = new Map([...other._map.entries()].map(([k, v]) => [k, new Map(v)]))
+      this._map = new Map(
+        [...other._map.entries()].map(([k, v]) => [k, new Map(v)]),
+      )
   }
 
   get(x, y) {
@@ -10,7 +12,7 @@ export class CoordinateMap {
   }
 
   set(x, y, v) {
-    if (!this._map.has(y)) this._map.set(y, new Map)
+    if (!this._map.has(y)) this._map.set(y, new Map())
     this._map.get(y).set(x, v)
   }
 
@@ -18,21 +20,17 @@ export class CoordinateMap {
     if (this._map.has(y)) {
       const row = this._map.get(y)
       row.delete(x)
-      if (row.size === 0)
-        this._map.delete(y)
+      if (row.size === 0) this._map.delete(y)
     }
   }
 
   *entries() {
     for (const [y, row] of this._map.entries())
-      for (const [x, v] of row.entries())
-        yield [[x, y], v]
+      for (const [x, v] of row.entries()) yield [[x, y], v]
   }
 
   *keys() {
     for (const [y, row] of this._map.entries())
-      for (const x of row.keys())
-        yield [x, y]
+      for (const x of row.keys()) yield [x, y]
   }
 }
-
