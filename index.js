@@ -24,6 +24,69 @@ navigator.serviceWorker.register("service-worker.js")
 const MAX_UNDO_STEPS = 2048
 
 const fontConfig = await fetch("fonts/config.json").then((t) => t.json())
+const utf8Config = await fetch("fonts/_utf8.txt")
+  .then((t) => t.text())
+  .then((text) =>
+    Object.fromEntries(
+      text
+        .split("\r\n")
+        .filter((l) => l)
+        .map((line) => {
+          const [, key, value] = /^\s*(\d+)\s+(\d+)$/.exec(line)
+          return [key, value]
+        }),
+    ),
+  )
+
+function makeFont(fontName) {
+  const canvas = document.createElement("canvas")
+  const ctx = canvas.getContext("2d")
+  ctx.font = fontName
+  const metrics = ctx.measureText("0")
+  const tileWidth = Math.ceil(metrics.width)
+  const tileHeight = Math.ceil(
+    metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent,
+  )
+  canvas.width = tileWidth * 16
+  canvas.height = tileHeight * 16
+  ctx.font = fontName
+  ctx.fillStyle = "black"
+  ctx.fillRect(0, 0, 256 * 16, 16 * 16)
+  ctx.fillStyle = "white"
+  for (let i = 0; i < 256; i++) {
+    const c = String.fromCharCode(utf8Config[i] ?? i)
+    if (i === 0xdb) {
+      // 0xdb is the full square, so we draw it in white
+      ctx.fillRect(
+        (i % 16) * tileWidth,
+        Math.floor(i / 16) * tileHeight,
+        tileWidth,
+        tileHeight,
+      )
+    } else {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(
+        (i % 16) * tileWidth,
+        Math.floor(i / 16) * tileHeight,
+        tileWidth,
+        tileHeight,
+      )
+      ctx.clip()
+      ctx.fillText(
+        c,
+        (i % 16) * tileWidth,
+        Math.floor(i / 16) * tileHeight + metrics.fontBoundingBoxAscent,
+      )
+      ctx.restore()
+    }
+  }
+  return {
+    image: canvas,
+    tileWidth,
+    tileHeight,
+  }
+}
 
 function* floodFill(origin, neighbors) {
   const q = []
@@ -1985,7 +2048,7 @@ const App = {
 
             ctx.drawChar(
               BoxDrawing.LU_D,
-              width - 3,
+              width - 4,
               height + 1,
               borderFg,
               borderBg,
@@ -2051,6 +2114,21 @@ const App = {
             }
           },
         },
+        button({
+          x: 13,
+          y: 18,
+          width: 1,
+          title() {
+            return "+"
+          },
+          click() {
+            App.later(() => {
+              App.fontIdx = -1
+              App.font = makeFont("14pt JetBrains Mono")
+              App.requestRedraw()
+            })
+          },
+        }),
         button({
           x: 14,
           y: 18,
@@ -3684,8 +3762,7 @@ async function start() {
     gl.clearColor(0, 0, 0, 1)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-    function drawChar(img, c, dx, dy, fg, bg) {
-      const tex = getTexture(img)
+    function drawChar(tex, c, dx, dy, fg, bg) {
       const tw = App.font.tileWidth,
         th = App.font.tileHeight
       if (dx < -tw || dy < -th || dx >= canvas.width || dy >= canvas.height)
@@ -3740,7 +3817,7 @@ async function start() {
       height: (canvas.height / App.font.tileHeight) | 0,
       drawChar(img, c, tx, ty, fg, bg) {
         drawChar(
-          img,
+          getTexture(img),
           c,
           tx * App.font.tileWidth,
           ty * App.font.tileHeight,
@@ -3763,7 +3840,7 @@ async function start() {
           tw,
           th,
           tx * tw,
-          ty * tw,
+          ty * th,
           tw * w,
           th * h,
           color,
