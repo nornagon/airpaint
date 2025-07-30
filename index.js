@@ -73,10 +73,10 @@ class CanvasFontTextureSource {
 }
 
 class ImageFontTextureSource extends ImageTextureSource {
-  constructor(image, { tileWidth, tileHeight }) {
-    super(image)
-    this.tileWidth = tileWidth
-    this.tileHeight = tileHeight
+  constructor(font) {
+    super(font.image)
+    this.tileWidth = font.tileWidth
+    this.tileHeight = font.tileHeight
   }
 
   getCoords(c) {
@@ -596,13 +596,9 @@ function toPng(font, file) {
   const textureForImage = new WeakMap()
   function getTexture(font) {
     if (!textureForImage.get(font)) {
-      const { image, tileWidth, tileHeight } = font
       textureForImage.set(
         font,
-        new FontTexture(
-          gl,
-          new ImageFontTextureSource(image, { tileWidth, tileHeight }),
-        ),
+        new FontTexture(gl, new ImageFontTextureSource(font)),
       )
     }
     return textureForImage.get(font)
@@ -3599,7 +3595,7 @@ const App = {
           width,
           height,
           drawChar(c, x, y, fg, bg) {
-            drawChar(App.font.image, c, x + px + el.x, y + py + el.y, fg, bg)
+            drawChar(App.font, c, x + px + el.x, y + py + el.y, fg, bg)
           },
           drawText(str, x, y, fg, bg) {
             str = "" + str
@@ -3814,11 +3810,15 @@ async function start() {
   }
   App.requestRedraw = dirty
 
-  const textureForImage = new WeakMap()
-  function getTexture(img) {
-    if (!textureForImage.get(img))
-      textureForImage.set(img, new Texture(gl, new ImageTextureSource(img)))
-    return textureForImage.get(img)
+  const textureForFont = new WeakMap()
+
+  function getTexture(font) {
+    if (!textureForFont.get(font))
+      textureForFont.set(
+        font,
+        new FontTexture(gl, new ImageFontTextureSource(font)),
+      )
+    return textureForFont.get(font)
   }
 
   function draw() {
@@ -3831,14 +3831,13 @@ async function start() {
     gl.clearColor(0, 0, 0, 1)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-    function drawChar(tex, c, dx, dy, fg, bg) {
-      const tw = App.font.tileWidth,
-        th = App.font.tileHeight
+    const isTransparent = ({ r, g, b }) => r === 1 && g === 0 && b === 1
+    function drawChar(font, c, dx, dy, fg, bg) {
+      const tw = font.tileWidth,
+        th = font.tileHeight
       if (dx < -tw || dy < -th || dx >= canvas.width || dy >= canvas.height)
         return
-      const sx = c % 16
-      const sy = (c / 16) | 0
-      const isTransparent = ({ r, g, b }) => r === 1 && g === 0 && b === 1
+      const tex = getTexture(font)
       const realBg =
         bg && isTransparent(bg)
           ? fg && !isTransparent(fg)
@@ -3846,37 +3845,13 @@ async function start() {
             : null
           : bg
       if (realBg != null) {
-        const bgsx = 0xdb % 16
-        const bgsy = (0xdb / 16) | 0
         // TODO: not all fonts might have 0xdb be the full square? maybe have
         // to fix this one at some point.
-        spriteBatch.drawRegion(
-          tex,
-          bgsx * tw,
-          bgsy * th,
-          tw,
-          th,
-          dx,
-          dy,
-          tw,
-          th,
-          realBg,
-        )
+        tex.draw(spriteBatch, 0xdb, dx, dy, realBg)
       }
       if (fg != null)
         if (!(fg.r === 1 && fg.g === 0 && fg.b === 1))
-          spriteBatch.drawRegion(
-            tex,
-            sx * tw,
-            sy * th,
-            tw,
-            th,
-            dx,
-            dy,
-            tw,
-            th,
-            fg,
-          )
+          tex.draw(spriteBatch, c, dx, dy, fg)
     }
 
     //console.time('draw')
@@ -3884,9 +3859,9 @@ async function start() {
     App.draw({
       width: (canvas.width / App.font.tileWidth) | 0,
       height: (canvas.height / App.font.tileHeight) | 0,
-      drawChar(img, c, tx, ty, fg, bg) {
+      drawChar(font, c, tx, ty, fg, bg) {
         drawChar(
-          getTexture(img),
+          font,
           c,
           tx * App.font.tileWidth,
           ty * App.font.tileHeight,
@@ -3895,7 +3870,7 @@ async function start() {
         )
       },
       fill(tx, ty, w, h, color) {
-        const tex = getTexture(App.font.image)
+        const tex = getTexture(App.font)
         const tw = App.font.tileWidth,
           th = App.font.tileHeight
         const bgsx = 0xdb % 16
