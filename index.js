@@ -39,24 +39,65 @@ const utf8Config = await fetch("fonts/_utf8.txt")
   )
 
 class CanvasFontTextureSource {
-  constructor(fontName, chars) {
+  #dirty = true
+  constructor(fontName) {
     this.fontName = fontName
-    this.chars = chars
     const canvas = document.createElement("canvas")
     const ctx = canvas.getContext("2d")
     ctx.font = fontName
     const metrics = ctx.measureText("0")
-    const tileWidth = Math.ceil(metrics.width)
-    const tileHeight = Math.ceil(
+    this.tileWidth = Math.ceil(metrics.width)
+    this.tileHeight = Math.ceil(
       metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent,
     )
+    this.width = this.tileWidth * 16
+    this.height = this.tileHeight * 32 // extra space...
+    /** @type {Map<number, {x: number, y: number, w: number, h: number}>} */
+    this.chars = new Map()
   }
 
-  get width() {
-    return this.metrics.width
+  #image() {
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+    canvas.width = this.width
+    canvas.height = this.height
+    ctx.font = this.fontName
+    const metrics = ctx.measureText("0")
+    ctx.fillStyle = "white"
+    for (const [c, { x, y }] of this.chars.entries()) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(x, y, this.tileWidth, this.tileHeight)
+      ctx.clip()
+      ctx.fillText(
+        String.fromCharCode(utf8Config[c] ?? c),
+        x,
+        y + metrics.fontBoundingBoxAscent,
+      )
+      ctx.restore()
+    }
+    return canvas
   }
-  get height() {
-    return this.height
+
+  getCoords(c) {
+    if (!this.chars.has(c)) {
+      const i = this.chars.size
+      this.chars.set(c, {
+        x: (i % 16) * this.tileWidth,
+        y: Math.floor(i / 16) * this.tileHeight,
+        w: this.tileWidth,
+        h: this.tileHeight,
+      })
+      this.#dirty = true
+    }
+    return this.chars.get(c)
+  }
+
+  willDraw(gl) {
+    if (this.#dirty) {
+      this.upload(gl)
+      this.#dirty = false
+    }
   }
 
   upload(gl) {
@@ -66,9 +107,8 @@ class CanvasFontTextureSource {
       gl.RGBA,
       gl.RGBA,
       gl.UNSIGNED_BYTE,
-      this.image,
+      this.#image(),
     )
-    this.image = null // release
   }
 }
 
@@ -104,50 +144,11 @@ class FontTexture extends Texture {
 }
 
 function makeFont(fontName) {
-  const canvas = document.createElement("canvas")
-  const ctx = canvas.getContext("2d")
-  ctx.font = fontName
-  const metrics = ctx.measureText("0")
-  const tileWidth = Math.ceil(metrics.width)
-  const tileHeight = Math.ceil(
-    metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent,
-  )
-  canvas.width = tileWidth * 16
-  canvas.height = tileHeight * 16
-  ctx.font = fontName
-  ctx.fillStyle = "white"
-  for (let i = 0; i < 256; i++) {
-    const c = String.fromCharCode(utf8Config[i] ?? i)
-    if (i === 0xdb) {
-      // 0xdb is the full square, so we draw it in white
-      ctx.fillRect(
-        (i % 16) * tileWidth,
-        Math.floor(i / 16) * tileHeight,
-        tileWidth,
-        tileHeight,
-      )
-    } else {
-      ctx.save()
-      ctx.beginPath()
-      ctx.rect(
-        (i % 16) * tileWidth,
-        Math.floor(i / 16) * tileHeight,
-        tileWidth,
-        tileHeight,
-      )
-      ctx.clip()
-      ctx.fillText(
-        c,
-        (i % 16) * tileWidth,
-        Math.floor(i / 16) * tileHeight + metrics.fontBoundingBoxAscent,
-      )
-      ctx.restore()
-    }
-  }
+  const textureSource = new CanvasFontTextureSource(fontName)
   return {
-    image: canvas,
-    tileWidth,
-    tileHeight,
+    textureSource,
+    tileWidth: textureSource.tileWidth,
+    tileHeight: textureSource.tileHeight,
   }
 }
 
@@ -313,6 +314,7 @@ function textToolOverlay({ x, y, tx, ty }) {
   textarea.style.pointerEvents = "none"
   textarea.oninput = () => {
     obj.text = textarea.value
+    App.requestRedraw()
   }
   setTimeout(() => {
     textarea.focus()
@@ -3812,11 +3814,15 @@ async function start() {
 
   const textureForFont = new WeakMap()
 
+  /** @returns {FontTexture} */
   function getTexture(font) {
     if (!textureForFont.get(font))
       textureForFont.set(
         font,
-        new FontTexture(gl, new ImageFontTextureSource(font)),
+        new FontTexture(
+          gl,
+          font.textureSource ?? new ImageFontTextureSource(font),
+        ),
       )
     return textureForFont.get(font)
   }
@@ -3860,14 +3866,7 @@ async function start() {
       width: (canvas.width / App.font.tileWidth) | 0,
       height: (canvas.height / App.font.tileHeight) | 0,
       drawChar(font, c, tx, ty, fg, bg) {
-        drawChar(
-          font,
-          c,
-          tx * App.font.tileWidth,
-          ty * App.font.tileHeight,
-          fg,
-          bg,
-        )
+        drawChar(font, c, tx * font.tileWidth, ty * font.tileHeight, fg, bg)
       },
       fill(tx, ty, w, h, color) {
         const tex = getTexture(App.font)
