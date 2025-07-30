@@ -59,8 +59,9 @@ class CanvasFontTextureSource {
   #image() {
     const canvas = document.createElement("canvas")
     const ctx = canvas.getContext("2d")
-    canvas.width = this.width
-    canvas.height = this.height
+    canvas.width = this.width * devicePixelRatio
+    canvas.height = this.height * devicePixelRatio
+    ctx.scale(devicePixelRatio, devicePixelRatio)
     ctx.font = this.fontName
     const metrics = ctx.measureText("0")
     ctx.fillStyle = "white"
@@ -3792,7 +3793,7 @@ async function start() {
   const spriteBatch = new SpriteBatch(gl, prog)
 
   new ResizeObserver((entries) => {
-    const ratio = 1 //devicePixelRatio
+    const ratio = devicePixelRatio
     canvas.width = entries[0].contentRect.width * ratio
     canvas.height = entries[0].contentRect.height * ratio
     dirty()
@@ -3829,7 +3830,10 @@ async function start() {
 
   function draw() {
     gl.viewport(0, 0, canvas.width, canvas.height)
-    spriteBatch.resize(canvas.width, canvas.height)
+    spriteBatch.resize(
+      canvas.width / devicePixelRatio,
+      canvas.height / devicePixelRatio,
+    )
 
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)

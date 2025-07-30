@@ -187,23 +187,12 @@ export class SpriteBatch {
     const tx = -(right + left) / (right - left)
     const ty = -(top + bottom) / (top - bottom)
     const tz = -(zFar + zNear) / (zFar - zNear)
+    // prettier-ignore
     const projMat = [
-      2 / (right - left),
-      0,
-      0,
-      0,
-      0,
-      2 / (top - bottom),
-      0,
-      0,
-      0,
-      0,
-      -2 / (zFar - zNear),
-      0,
-      tx,
-      ty,
-      tz,
-      1,
+      2 / (right - left), 0, 0, 0,
+      0, 2 / (top - bottom), 0, 0,
+      0, 0, -2 / (zFar - zNear), 0,
+      tx, ty, tz, 1,
     ]
     gl.uniformMatrix4fv(this.program.uniforms.get("u_projView"), false, projMat)
     gl.uniform1i(this.program.uniforms.get("u_texture"), 0)
