@@ -40,7 +40,8 @@ const utf8Config = await fetch("fonts/_utf8.txt")
 
 class CanvasFontTextureSource {
   #dirty = true
-  constructor(fontName) {
+  constructor(fontName, pixelRatio = window.devicePixelRatio) {
+    this.pixelRatio = pixelRatio
     this.fontName = fontName
     const canvas = document.createElement("canvas")
     const ctx = canvas.getContext("2d")
@@ -56,12 +57,17 @@ class CanvasFontTextureSource {
     this.chars = new Map()
   }
 
+  withPixelRatio(p) {
+    if (p === this.pixelRatio) return this
+    return new CanvasFontTextureSource(this.fontName, p)
+  }
+
   #image() {
     const canvas = document.createElement("canvas")
     const ctx = canvas.getContext("2d")
-    canvas.width = this.width * devicePixelRatio
-    canvas.height = this.height * devicePixelRatio
-    ctx.scale(devicePixelRatio, devicePixelRatio)
+    canvas.width = this.width * this.pixelRatio
+    canvas.height = this.height * this.pixelRatio
+    ctx.scale(this.pixelRatio, this.pixelRatio)
     ctx.font = this.fontName
     const metrics = ctx.measureText("0")
     ctx.fillStyle = "white"
@@ -114,10 +120,14 @@ class CanvasFontTextureSource {
 }
 
 class ImageFontTextureSource extends ImageTextureSource {
-  constructor(font) {
-    super(font.image)
-    this.tileWidth = font.tileWidth
-    this.tileHeight = font.tileHeight
+  constructor({ image, tileWidth, tileHeight }) {
+    super(image)
+    this.tileWidth = tileWidth
+    this.tileHeight = tileHeight
+  }
+
+  withPixelRatio(_p) {
+    return this
   }
 
   getCoords(c) {
@@ -539,8 +549,9 @@ function deleteDialog(file) {
   return dialog
 }
 
-function toPng(font, file) {
-  const { tileWidth, tileHeight, image } = font
+function toPng(font, file, pixelRatio = window.devicePixelRatio) {
+  const { tileWidth, tileHeight } = font
+
   const { layers } = file
 
   let lx = Infinity,
@@ -557,8 +568,8 @@ function toPng(font, file) {
   const width = hx - lx + 1
   const height = hy - ly + 1
   const canvas = document.createElement("canvas")
-  canvas.width = width * tileWidth
-  canvas.height = height * tileHeight
+  canvas.width = width * tileWidth * pixelRatio
+  canvas.height = height * tileHeight * pixelRatio
   const gl = canvas.getContext("webgl")
   const prog = createProgram(
     gl,
@@ -596,18 +607,18 @@ function toPng(font, file) {
     ],
   )
   const spriteBatch = new SpriteBatch(gl, prog)
-  const textureForImage = new WeakMap()
+  const textureForFont = new WeakMap()
+  /** @returns {FontTexture} */
   function getTexture(font) {
-    if (!textureForImage.get(font)) {
-      textureForImage.set(
+    if (!textureForFont.get(font))
+      textureForFont.set(
         font,
-        new FontTexture(gl, new ImageFontTextureSource(font)),
+        new FontTexture(gl, font.textureSource.withPixelRatio(pixelRatio)),
       )
-    }
-    return textureForImage.get(font)
+    return textureForFont.get(font)
   }
   gl.viewport(0, 0, canvas.width, canvas.height)
-  spriteBatch.resize(canvas.width, canvas.height)
+  spriteBatch.resize(canvas.width / pixelRatio, canvas.height / pixelRatio)
 
   gl.enable(gl.BLEND)
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
@@ -645,7 +656,7 @@ function toPng(font, file) {
         if (!c) return false
         return (c.fg && !isTransparent(c.fg)) || (c.bg && !isTransparent(c.bg))
       })
-      drawChar(image, char, rx * tileWidth, ry * tileHeight, fg, bg, atop)
+      drawChar(font, char, rx * tileWidth, ry * tileHeight, fg, bg, atop)
     }
   }
   spriteBatch.end()
@@ -3532,10 +3543,16 @@ const App = {
       img.onerror = reject
     })
 
+    const tileWidth = image.width / font.art.columns
+    const tileHeight = image.height / font.art.rows
     this.font = {
-      image,
-      tileWidth: image.width / font.art.columns,
-      tileHeight: image.height / font.art.rows,
+      textureSource: new ImageFontTextureSource({
+        image,
+        tileWidth,
+        tileHeight,
+      }),
+      tileWidth,
+      tileHeight,
     }
   },
   init() {
@@ -3818,13 +3835,7 @@ async function start() {
   /** @returns {FontTexture} */
   function getTexture(font) {
     if (!textureForFont.get(font))
-      textureForFont.set(
-        font,
-        new FontTexture(
-          gl,
-          font.textureSource ?? new ImageFontTextureSource(font),
-        ),
-      )
+      textureForFont.set(font, new FontTexture(gl, font.textureSource))
     return textureForFont.get(font)
   }
 
